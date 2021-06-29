@@ -3,3 +3,40 @@
 Citation:
 ```
 Hawe et al 2021 Nature Genetics
+```
+
+## Identification of meQTLs
+
+## Identification of eQTMs
+
+## Functional analyses of meQTLs
+
+### Enrichment of transcription factor binding sites at trans-meQTL CpG sites
+
+We test for over-representation of TFBS of specific factors at the CpG sites that share trans meQTL. To reproduce the results in Figure 3 and the extended data figure 4 follow these steps.
+
+First run `R/annotate-cpgs.R` this creates CpG contexts of sizes 2, 100, 500,
+1000, 5000, 10000
+
+```{bash}
+for i in 2 100 500 1000 5000 10000; do
+  qsub -V -cwd -l job_mem=15G -N tfbs_context_$i -q long@@core R/tfbs-enrichment.R --size $i --resample 0
+done
+```
+
+Also run the TFBS analysis on the union of binding sites for each factor over
+the different experiments
+
+```{bash}
+qsub -V -cwd -l job_mem=15G -N tfbs_context_$i -q long@@core R/tfbs-enrichment.R --size 100 --resample 0 --prefix results/current/enrichment_chipseq_context_100_resample_0_by_tf --tfbs results/current/cpgs_with_chipseq_context_100_by_tf.RData
+```
+
+To run the analysis with resampling instead of the analytical P-values you can specify the `--resample<int>` option and specify how many resampling runs should be done to determine empirical P-values. 
+
+### Network analysis
+
+Code for the network analysis based on random walks is provided in the R package [QTLnetwork](https://github.com/heiniglab/QTLnetwork).
+
+## Identification of iQTL
+
+
