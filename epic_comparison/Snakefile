@@ -1,0 +1,34 @@
+# ------------------------------------------------------------------------------
+# Perform the TFBS enrichment for the EPIC replication
+# ------------------------------------------------------------------------------
+rule tfbs_enrichment_epic:
+	input:
+		cpg_annot = "data/current/annotation/cpg_annotation_both_arrays.tsv",
+		meqtls = "data/current/meQTLs/sentinels_with_trans_epic.tsv",
+		tfbs_granges = "results/current/tfbs_granges.RData",
+	output:
+		tfbs_annot = "results/current/epic_cpgs_with_chipseq_context_100_resample_{nresample}_{cpg_subset}.RData",
+		result = "results/current/enrichment_chipseq_epic_context_100_resample_{nresample}_{cpg_subset}.txt"
+	wildcard_constraints:
+		nresample = "[0-9]+"
+	threads:
+		21
+	resources:
+		mem_mb = 1000
+	params:
+		time = "1-00:00:00"
+	log:
+		"logs/tfbs_enrichment_epic_resample_{nresample}_{cpg_subset}.log"
+	benchmark:
+		"benchmarks/tfbs_enrichment_epic_resample_{nresample}_{cpg_subset}.bmk"
+	script:
+		"R/tfbs-enrichment-epic.R"
+
+
+rule tfbs_enrichment_epic_10000:
+	input:
+		"results/current/enrichment_chipseq_epic_context_100_resample_10000_450konly.txt",
+		"results/current/enrichment_chipseq_epic_context_100_resample_10000_450kwith450kBG.txt",
+		"results/current/enrichment_chipseq_epic_context_100_resample_10000_450kwithEPIC.txt",
+		"results/current/enrichment_chipseq_epic_context_100_resample_10000_EPICFull.txt",
+		"results/current/enrichment_chipseq_epic_context_100_resample_10000_EPICnoNovel.txt"
