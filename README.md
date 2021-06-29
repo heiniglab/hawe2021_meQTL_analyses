@@ -11,6 +11,8 @@ Table of Contents
    * [Identification of meQTLs](#identification-of-meqtls)
    * [Identification of eQTMs](#identification-of-eqtms)
    * [Functional analyses of meQTLs](#functional-analyses-of-meqtls)
+      * [Chromatin state enrichment](#chromatin-state-enrichment)
+      * [HiC enrichment](#hic-enrichment)
       * [Enrichment of transcription factor binding sites at trans-meQTL CpG sites](#enrichment-of-transcription-factor-binding-sites-at-trans-meqtl-cpg-sites)
       * [Network analysis](#network-analysis)
    * [Identification of iQTL](#identification-of-iqtl)
