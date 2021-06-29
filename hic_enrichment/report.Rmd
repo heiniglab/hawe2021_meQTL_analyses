@@ -1,0 +1,490 @@
+---
+title: "meQTL HiC enrichment"
+author: "Johann Hawe"
+date: "5/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(tidyverse)
+library(scales)
+library(reshape2)
+library(cowplot)
+library(ggpubr)
+
+theme_set(theme_cowplot())
+dout_figures <- "results/current/figures/"
+dir.create(dout_figures)
+```
+
+## meQTL HIC enrichment
+
+```{r quickload, echo=F}
+# just get quickly number of performed iterations for analysis from files
+denrich <- "results/current/javierre/trans_enrichment/50000/"
+ftrans <- list.files(denrich, 
+                     "iteration.*.RData$",  # new results
+                     #"HIC_enrich.*.RData$", 
+                     full.names = T)
+
+# number of iterations from number of files produced
+iterations <- length(ftrans)
+```
+
+In this analysis we determine whether it is more likely to find meQTL within TADs
+or Hi-C contacts (HiC and PCHi-C data from Javierre et al.[1]) than we would expect by chance.
+We performed two distinct analysis, one for trans meQTLS using the global HiC data and one for longrange meQTLs, using both TAD definitions and the contacts
+identified from promoter capture HiC (PCHiC) contacts available from the supplement of their paper.
+For the TAD enrichment, we first concatenated the TADs for all available cell-types. 
+We then checked for each of the pruned meQTL whether the CpG and SNP are within the same TAD or not. Following that, we sample 'background-non-meQTL' for each of the meQTL doing the following:
+1. select a random non-meQTL SNP $S_R$ matched for allele frequency 
+(0.05 absolute tolerance) for the corresponding meQTL SNP
+2. select a random non-meQTL CpG $CpG_R$ with matched distance (meQTL distance with 
+10kp tolerance, longrange only) and matched beta distribution (mean and sd,
+tolerance 0.05)
+For these pairs we again determine whether those lie within the same TAD region. 
+We then create a contingency table as shown below and calculate the Fisher exact 
+test on this table. The determined p-value reflects the probability whether 
+we would expect to find a random, non-meQTL SNP-CpG pair within a TAD region. 
+The same analysis was performed for the PCHiC contacts (longrange) and HiC contacts (trans) with the same parameters, an overlap for an SNP-CpG pair is defined if
+the SNP is within the 'bait' region and the CpG is within the 'other/captured' region of the contact and vice versa. 
+For the background sampling we set an additional constrained to the possible SNP-CpG pairs such that at least one of them lies within a promoter region (longrange only).
+We then tested whether the meQTL SNP/CpG pairs are more enriched in the contacts,
+i.e. the SNP being e.g. in the 'bait' and the CpG being in the 'other/captured' sequence,
+as we would expect this to happen by chance.
+Since for all analyses random sampling is necessary, we performed `r iterations` 
+iterations to obtain stable results.
+
+### Trans interactions
+
+The analysis is based on the raw HiC data used in Javierre *et al.*.
+Raw FASTQ files were processed using HICUP v0.6.1 (bowtie2 mapping, read filtering) and its default parameters.
+The resulting BAM files were converted to HOMER ditag format and read positions were rounded to 50kb bins for all read pairs.
+All available samples were subsequently merged to a single file and only chromosome contacts which had at least 3 reads as evidence in any of the available cell types were used for the enrichment.
+Given the identified trans-meQTLs, 'pseudo-meQTL' were sampled to create a background set against which to check meQTL-HIC overlap as defined above.
+
+For this analysis, an overlap for a (pseudo-)SNP-CpG pair is counted, if both the SNP and the CpG are within the two regions of the chomosome contacts.
+
+```{r enrich_results, echo=F}
+# get hic results
+hic <- lapply(ftrans, function(f){
+  env <- new.env()
+  load(f, env)
+  with(env, list(ct=result$contingency_table))
+})
+
+# save total number of meQTL tested
+nr_meqtl <- sum(hic[[1]]$ct["meQTL",])
+
+# fisher test for hic
+hic_cts_trans <- lapply(hic, "[[", "ct")
+hic_ft <- lapply(hic_cts_trans, function(tab) { fisher.test(tab, 
+                                                       alternative = "g") })
+
+pvals_hic <- unlist(lapply(hic_ft, "[[", "p.value"))
+
+```
+
+
+A total of *`r nr_meqtl` trans meQTL* were tested for enrichment.
+Examplary, we first show a single contingency table created during the analysis.
+
+```{r example_tables, echo=F}
+print("Example table for HiC analysis:")
+print(hic_cts_trans[[1]])
+```
+
+Here we can already see that more meQTL overlap with HIC contact regions as compared
+to the sampled background (pseudo) meQTL.
+To determine statistical significance, we performed Fisher's exact test on the
+obtained contingency tables of all iterations.
+Below is the numerical summary of all p-values for the analysis:
+
+```{r pval_summaries, echo=F}
+print("Summary of HIC pvalues:")
+print(summary(pvals_hic))
+
+# get medians
+median_pv_hic <- median(pvals_hic)
+```
+
+The median *Fisher p-value* amounts to **`r format(median_pv_hic, digits=3)`**.
+
+Next, we aim at obtaining a single representative p-value over all iterations for the two analyses 
+which indicates the overall enrichment of real meQTLs in the HIC data.
+For this, we first extract odds-ratios from all contingency tables.
+Since for the Hi-C analysis we potentially retrieve some 'Infinite' values 
+(i.e. the background not showing any overlaps) we replace those values with 
+the maximal Odds Ratio of the non-infinite values for displaying purposes.
+
+```{r fisher_test, echo=F}
+# define the quantiles used for plotting
+qs <- c(0.01,0.99)
+
+# get the odds ratios for the hic analysis
+ors_hic <- unlist(lapply(hic_ft, "[[", "estimate"))
+m <- max(ors_hic[!is.infinite(ors_hic)])
+ors_hic_ni <- ifelse(is.infinite(ors_hic), m, ors_hic)
+quantiles_hic <- quantile(log10(ors_hic_ni), qs)
+
+print("Summary of HiC odds ratios:")
+print(summary(ors_hic))
+
+# create plotting data.frame
+df <- cbind.data.frame(odds_ratio=ors_hic_ni)
+df$analysis <- rep("HiC", length(ors_hic_ni))
+
+# for the vertical lines of the quantiles
+df2 <- cbind.data.frame(analysis=rep("HiC", 2),
+                        quantiles=quantiles_hic)
+
+ggplot(df, aes(x=log10(odds_ratio))) + geom_histogram(bins = 50) +
+  facet_grid( ~ analysis) + 
+  geom_vline(data=df2, aes(xintercept = quantiles), colour="red") + 
+  scale_x_continuous(limits=c(-2,2)) + 
+  ggtitle("Odds ratio distributions for HiC enrichment analysis.")
+
+# get median odds ratio and empirical pval
+med_hic <- median(ors_hic)
+emp_hic <- (sum(ors_hic<=1) + 1)/(iterations+1)
+```
+
+Above, the (log10) odds ratio distribution for the trans analysis is shown. 
+The red lines indicate the `r qs[1]*100` and `r qs[2]*100`% quantiles of the 
+distribution, respectively. The median Odds Ratios for the analysis amounts to 
+`r med_hic`.
+Assuming $H_0: OddsRatio \leq 1$, we can calculate an empirical
+p-value using $$P(D|H_0) = {\sum_{x\in D}{I(x\le1)} + 1  \over N + 1},$$ where $N$ is the total number of
+iterations/samplings performed, $D$ is the data (obtained Odds Ratios) and $I(A)$ is the indicator function, returning 1 if $A$ evaluates as $TRUE$ and 0 otherwise. 
+With this we can determine how likely it would be, to observe an Odds Ratio in the analysis which would indicate no enrichment of meQTL in the regions of interest.
+In our case, this yields an empiricla p-value $$p_{hic} = `r emp_hic`$$.
+The described values suggest a strong enrichment of trans-meQTL in the available data as compared to a random (but matched) background. The median as well as the lower `r qs[1]*100`% quantile of the Odds Ratios are above 1 (`r format(quantile(ors_hic, qs[1]), digits=3)`). In accordance to this, the empirical p-value indicates also significant enrichment.
+
+
+```{r echo=F}
+#' -----------------------------------------------------------------------------
+#' Plot a neat summary of the enrichment analyis
+#'
+#' @param confusion_tables List of all generated confusion tables
+#' @param fout The output pdf to which to plot to
+#' @param res Resolution of the HIC analysis
+#'
+#' @author Johann Hawe <johann.hawe@helmholtz-muenchen.de>
+#'
+#' -----------------------------------------------------------------------------
+plot_summary <- function(confusion_tables, group = "HiC", 
+                         group_label = "Overlap with HiC contacts",
+                         arrow_height = 5, bins = 30,
+                         title = NULL, fout=NULL) {
+
+  #' Helper to extract overlap percentages for all iterations
+  get_percentages <- function(confusion_tables) {
+    return(unlist(lapply(confusion_tables, function(ct) {
+      bg <- ct["background",]
+      return(bg["overlap"] / bg["no_overlap"])
+    })))
+  }
+
+  # extract background percentages
+  bg_percentages <- get_percentages(confusion_tables)
+
+  # get observed percentage of overlap
+  ct <- confusion_tables[[1]]["meQTL",]
+  observed <- ct["overlap"] / ct["no_overlap"]
+  
+  print("Mean percentage for background:")
+  print(mean(bg_percentages))
+  print("Observed percentage:")
+  print(observed)
+  print("Fold-enrichment given above estimates:")
+  print(observed/mean(bg_percentages))
+  
+  # create plotting data frame
+  df <- bg_percentages
+  df <- tibble(
+    percent_overlap = df,
+    group = group
+  )
+  df2 <- tibble(observed = observed,
+                          group = group)
+  # create the actual plot
+  if(is.null(title)) {
+    title <-
+      paste0(
+        "Distribution of overlaps of pseudo-meQTLs with\n",
+        "HiC contacts (N=",
+        nrow(df),
+        ")."
+      )
+  }
+  
+  facet_labels <- group_label
+  names(facet_labels) <- group
+  print(facet_labels)
+  gp <- ggplot(data = df, aes(x = percent_overlap)) +
+    geom_histogram(aes(col = "background", fill = "background"),
+                   bins = bins) +
+    facet_grid(. ~ group, labeller = as_labeller(facet_labels)) +
+    xlab("Fraction of meQTL") +
+    ggtitle(title) +
+    geom_segment(
+      data = df2,
+      show.legend = F,
+      aes(
+        x = observed,
+        xend = observed,
+        y = arrow_height,
+        yend = 0,
+        col = "observed"
+      ),
+      arrow = arrow(
+        ends = "last",
+        type = "closed",
+        angle = 20
+      )
+    ) +
+    scale_fill_manual(
+      name = "group",
+      values = c(observed = NA, background = "#666666"),
+      guide = "none"
+    ) +
+    scale_colour_manual(
+      name = "group",
+      values = c(background = "#666666", observed = "red"),
+      guide = "none"
+    ) +
+    guides(colour = guide_legend(override.aes = list(
+      shape = NA,
+      colour = NA,
+      fill = c(background =
+                 "#666666", observed = "red")
+    )))
+
+  if(!is.null(fout)) {
+    ggsave(fout, plot = gp,
+        width = 8,
+        height = 8)
+  }
+  gp
+}
+
+```
+
+The above plot shows the fraction of pseudo-meQTLs which overlap with HIC contacts (*background*)
+over all iterations (y-axis). The red arrow (*observed*) indicates the fraction of identified meQTLs
+which have HIC contact overlaps. One can clearly see that all background samples have far fewer
+overlaps as compared to the observed population of meQTLs.
+
+### Long-range interactions
+
+```{r enrich_results, echo=F}
+# load all individual files from the result directory
+denrich<-"results/current/javierre/longrange_enrichment/50000/"
+flongrange <- list.files(denrich, 
+                      "iteration.*.RData$", 
+                      full.names = T)
+# get tad results
+tad <- lapply(flongrange, function(f){
+  env <- new.env()
+  load(f, env)
+  with(env, list(ct=result$tad_enrich$contingency_table))
+})
+
+hic <- lapply(flongrange, function(f){
+  env <- new.env()
+  load(f, env)
+  with(env, list(ct=result$hic_enrich$contingency_table))
+})
+
+# save total number of meQTL tested
+nr_meqtl <- sum(hic[[1]]$ct["meQTL",])
+
+# fishertest for tad
+tad_cts <- lapply(tad, "[[", "ct")
+tad_ft <- lapply(tad_cts, function(tab) { fisher.test(tab,
+                                                       alternative = "g") })
+
+# fisher test for hic
+hic_cts <- lapply(hic, "[[", "ct")
+hic_ft <- lapply(hic_cts, function(tab) { fisher.test(tab, 
+                                                       alternative = "g") })
+```
+
+Now we show the results of the TAD enrichment analysis for the long-range 
+meQTL. A total of *`r nr_meqtl` longrange meQTL* were tested for enrichment.
+We show the results for each of the individual iterations. 
+Examplary we first show two contingency tables retrieved during the analysis.
+
+```{r example_tables, echo=F}
+print("Example table for TAD analysis:")
+print(tad_cts[[1]])
+print("Example table for HiC analysis:")
+print(hic_cts[[1]])
+```
+
+Now we summarize the results first by a histogram showing the $-log_{10}(pvalue)$ of the Fisher test for all iterations.
+
+```{r median_pvals, echo=F}
+pvals_tad <- unlist(lapply(tad_ft, "[[", "p.value"))
+pvals_hic <- unlist(lapply(hic_ft, "[[", "p.value"))
+
+df <- cbind.data.frame(pvalue=c(pvals_tad, pvals_hic))
+df$analysis <- c(rep("TAD", length(pvals_tad)), rep("HiC", length(pvals_hic)))
+df$x <- c(1:length(pvals_tad), 1:length(pvals_hic))
+
+ggplot(df, aes(x=-log10(pvalue))) + 
+  geom_histogram(binwidth=0.05) + 
+  #geom_bar(stat = "identity") +
+  facet_grid(. ~ analysis)
+```
+
+Below is the numerical summary of the p-values for the different analyses.
+
+```{r pval_summaries, echo=F}
+print("Summary of TAD pvalues:")
+print(summary(pvals_tad))
+print("Summary of HIC pvalues:")
+print(summary(pvals_hic))
+
+# get medians
+median_pv_tad <- median(pvals_tad)
+median_pv_hic <- median(pvals_hic)
+```
+
+The median *Fisher p-value* amounts to **`r format(median_pv_tad, digits=3)`** for the TAD
+enrichment analysis and to **`r format(median_pv_hic, digits=3)`** for the HiC contact
+enrichment analysis, respectively.
+
+Now we process all contingency tables returned from the analyses to get a representative p-value over all iterations.
+For this, we first extract odds-ratios from all tables and show the histogram of these values. Since for the
+HIC analysis we retrieve some 'Inf' values (i.e. the background not showing any overlaps) we replace those values with the maximal odds_ratio of the other values for displaying purposes.
+
+```{r fisher_test, echo=F}
+# define the quantiles used for plotting
+qs <- c(0.01,0.99)
+
+ors_tad <- unlist(lapply(tad_ft, "[[", "estimate"))
+m <- max(ors_tad[!is.infinite(ors_tad)])
+ors_tad_ni <- ifelse(is.infinite(ors_tad), m, ors_tad)
+quantiles_tad <- quantile(log10(ors_tad_ni), qs)
+
+print("Summary of TAD odds ratios:")
+print(summary(ors_tad))
+
+ors_hic <- unlist(lapply(hic_ft, "[[", "estimate"))
+m <- max(ors_hic[!is.infinite(ors_hic)])
+ors_hic_ni <- ifelse(is.infinite(ors_hic), m, ors_hic)
+quantiles_hic <- quantile(log10(ors_hic_ni), qs)
+
+print("Summary of HiC odds ratios:")
+print(summary(ors_hic))
+
+# create plotting data.frame
+df <- cbind.data.frame(odds_ratio=c(ors_tad_ni, ors_hic_ni))
+df$analysis <- c(rep("TAD", length(ors_tad_ni)), 
+                 rep("HiC", length(ors_hic_ni)))
+
+# for the vertical lines of the quantiles
+df2 <- cbind.data.frame(analysis=c(rep("TAD",2), rep("HiC", 2)),
+                        quantiles=c(quantiles_tad, quantiles_hic))
+
+
+ggplot(df, aes(x=log10(odds_ratio))) + geom_histogram() + 
+  facet_grid(~analysis) + 
+  geom_vline(data=df2, aes(xintercept = quantiles), colour="red") + 
+  #geom_text(data=df2, aes(x=quantiles, label=paste0(rep(qs,2), "q"), y=10), 
+  #          colour="blue", angle=0, hjust=0.5, text=element_text(size=11)) +
+  scale_x_continuous(limits=c(-2,2)) + 
+  ggtitle("Odds ratio distributions for HiC and TAD enrichment analysis.")
+
+```
+
+Above the odds ratio distributions for the individual analyses are shown. The red
+lines indicate the `r qs[1]` and `r qs[2]`% quantiles of the distributions, respectively.
+
+Next, we create the same summary plot (ORs) for longrange TAD and HiC as for the
+trans analysis.
+
+```{r longrange_summary, echo=F}
+gp_hic_longrange <- plot_summary(tad_cts, group = "TADs", group_label = "longrange TAD overlap",
+                                 title = "Colocalization of longrange \nmeQTL in TAD regions",arrow_height = 20, bins=10)
+gp_tad_longrange <- plot_summary(hic_cts, group = "HiC", group_label = "longrange PCHiC overlap",
+                                 title = "Colocalization of longrange \nmeQTL in PCHiC contacts", arrow_height = 15, bins=20)
+gp_hic_trans <- plot_summary(hic_cts_trans, group = "HiC", group_label = "trans HiC overlap",
+                             title = "Overlap of trans meQTL \nwith HiC contacts", arrow_height = 13)
+
+gp <- ggpubr::ggarrange(gp_hic_longrange + labs(title = "") + theme(axis.title.x = element_blank()), 
+                        gp_tad_longrange + labs(title = ""), 
+                        gp_hic_trans + labs(title = "") + theme(axis.title.x = element_blank()),
+                        align = "h", labels="AUTO",
+                        ncol=1, nrow=3, common.legend = T, legend = "bottom")
+gp
+save_plot(file.path(dout_figures, "hic_enrichment_rows.pdf"), gp,
+          nrow=3, base_aspect_ratio = 0.9)
+```
+
+Next, we perform a rather naive analysis, where we just sum up all elements of the respective
+contingency tables and devide by the total number of tables (getting mean entries for the tables).
+On this table of means we first check the margins (should have the same Ns as the other tables) 
+and then retrieve again the p-value from the Fisher exact test.
+
+```{r table_of_means, echo=F}
+
+# get mean tables
+#TAD
+mean_tad <- tad_cts[[1]]
+for(i in 2:length(tad_cts)) {
+  mean_tad <- mean_tad + tad_cts[[i]]
+}
+mean_tad <- round(mean_tad / length(tad_cts))
+
+#HIC
+mean_hic <- hic_cts[[1]]
+for(i in 2:length(hic_cts)) {
+  mean_hic <- mean_hic + hic_cts[[i]]
+}
+mean_hic <- round(mean_hic / length(hic_cts))
+
+print("TAD mean table:")
+print(mean_tad)
+print("HIC mean table:")
+print(mean_hic)
+
+# check margins against random table
+print_margins <- function(x) {
+  print(apply(x,1,sum))
+  print(apply(x,2,sum))
+}
+```
+
+Above are the two calculated (rounded) mean tables for both analyses. We now compare the margins (row and col sums)
+of those tables to one of the original tables.
+
+```{r table_of_means2, echo=F}
+print("TAD mean table, margins:")
+print_margins(mean_tad)
+print("TAD random table, margins:")
+print_margins(tad_cts[[1]])
+print("HIC mean table, margins:")
+print_margins(mean_hic)
+print("HIC random table, margins:")
+print_margins(hic_cts[[1]])
+```
+
+Finally, we calculate the fisher.pvalue on the two mean tables, using the same alternative
+as for the other calculations (i.e. $alternative='g'$)
+
+```{r table_of_means3, echo=F}
+# print fisher test results
+print("Fisher test on mean TAD table:")
+print(fisher.test(mean_tad, alternative="g"))
+print("Fisher test on mean HIC table:")
+print(fisher.test(mean_hic, alternative="g"))
+```
+
+## References
+1. Javierre, B. M. et al. Lineage-Specific Genome Architecture Links Enhancers and Non-coding Disease Variants to Target Gene Promoters. Cell 167, 1369–1384.e19 (2016).
+
+

@@ -21,6 +21,12 @@ Table of Contents
 
 ## Functional analyses of meQTLs
 
+### Chromatin state enrichment
+
+### HiC enrichment
+
+All details for the HiC contact enrichment are provided in a separate [README](hic_enrichment/README.md).
+
 ### Enrichment of transcription factor binding sites at trans-meQTL CpG sites
 
 We test for over-representation of TFBS of specific factors at the CpG sites that share trans meQTL. To reproduce the results in Figure 3 and the extended data figure 4 follow these steps.

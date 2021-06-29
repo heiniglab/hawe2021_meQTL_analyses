@@ -1,0 +1,195 @@
+# ------------------------------------------------------------------------------
+# Here we define all rules which are used in context of the HiC enrichment 
+# analyses. This entails e.g. the rules to preprocess the raw data from the
+# Javierre et al. 2016 paper.
+# The long-range HiC data is taken from the Javierre et al. supplement.
+# Here we use the TAD definitions and high-confidence HiC contacts.
+# We use the raw data to perform an enrichment analysis for the trans-meQTL
+# associations.
+#
+# @author Johann Hawe <johann.hawe@helmholtz-muenchen.de>
+# ------------------------------------------------------------------------------
+
+# input/output directories and files
+HIC_RESULT_DIR="results/current/javierre/"
+TAD_DIR = "data/current/javierre-2016/TADs/"
+CTs = glob_wildcards(TAD_DIR + "/TADs_{celltype}_mean_merged.bed")
+
+# what kinds of meqtl to process
+MEQTL_TYPES = ["longrange", "trans"] 
+
+# number of iterations for the enrichment sampling
+ITERS = range(1,151) 
+
+# ------------------------------------------------------------------------------
+# Define local rules (not to be run on cluster)
+# ------------------------------------------------------------------------------
+localrules: hicup2homer, merge_tag_counts, get_tag_counts, all_hic, merge_tads
+
+# -----------------------------------------------------------------------------
+# Get the homer input files from the hicup results.
+# As of now, it seems we have to create the hicup processed bam files manually.
+# (the inputs for this rule)
+# See the projects README for info on how to get those
+# -----------------------------------------------------------------------------
+HIC = glob_wildcards("results/current/hicup/{sample}.hicup.bam")
+rule hicup2homer:
+        input:
+                HIC_RESULT_DIR + "hicup/{sample}.hicup.bam"
+        output:
+                HIC_RESULT_DIR + "hicup/{sample}.hicup.bam.homer"
+        threads: 1
+        resources:
+                mem_mb=1000
+        params:
+                time = "00:30:00"
+        log:
+                "logs/hicup2homer/{sample}.log"
+        benchmark:
+                "benchmarks/hicup2homer/{sample}.log"
+        shell:
+                """
+                hicup2homer {input} &> {log}
+                """
+
+# -----------------------------------------------------------------------------
+# Get the tag counts for specific bins for all contact regions from the HOMER
+# files using an awk script. Retain only trans associations.
+# -----------------------------------------------------------------------------
+rule get_tag_counts:
+        input:
+                HIC_RESULT_DIR + "hicup/{sample}.hicup.bam.homer"
+        output:
+                HIC_RESULT_DIR + "tag_counts/{res}/{sample}_counts.txt"
+        threads: 1
+        resources:
+                mem_mb=500
+        params:
+                time = "00:40:00"
+        log:
+                "logs/get_tag_counts/{sample}_{res}.log"
+        benchmark:
+                "benchmarks/get_tag_counts/{sample}_{res}.bmk"
+        shell:
+                """
+                res={wildcards.res}
+                awk '{{OFS="\\t"; if($2 != $5) {{ b=int($3/'$res')*'$res'; d=int($6/'$res')*'$res'; a=$2; c=$5; if($2>$5) {{ a=$5; e=b; b=d; d=e; c=$2 }}; print(a,b,c,d) }} }}' {input} | \
+sort | uniq -c | awk '{{OFS="\\t"; print($1,$2,$3,$4,$5) }}' > {output}
+                """
+
+# -----------------------------------------------------------------------------
+# Merge all tag count files and filter for a total number of reads per overlap
+# -----------------------------------------------------------------------------
+rule merge_tag_counts:
+        input:
+                expand(HIC_RESULT_DIR + "tag_counts/{{res}}/{sample}_counts.txt", sample=HIC.sample)
+        output:
+                HIC_RESULT_DIR + "tag_counts/{res}/merged_gte{cutoff}.txt"
+        threads: 1
+        resources:
+                mem_mb=5000
+        params:
+                time = "01:00:00"
+        shell:
+                """
+                cut -f 2,3,4,5 {input} | sort | uniq -c | awk '{{OFS="\\t"; if($1>={wildcards.cutoff}) print($1,$2,$3,$4,$5)}}' - > {output}
+                """
+
+# -----------------------------------------------------------------------------
+# get a merged bed file for all TADs identified in the individual cell-types
+# possible extension: annotate the cell-types for the individual regions
+# -----------------------------------------------------------------------------
+rule merge_tads:
+        input:
+                expand("data/current/javierre-2016/TADs/TADs_{ct}_mean_merged.bed", ct=CTs.celltype)
+        output:
+                HIC_RESULT_DIR + "TADs_merged.bed"
+        shell:
+                "cat {input} | sort -nr | uniq | sort -n > {output}"
+
+# -----------------------------------------------------------------------------
+# create a simple text file containing a list of all measured cpgs from KORA
+# data and the meQTL cpg ids from the cosmo object
+# This is used for doing the sample based HiC enrichment analysis
+# -----------------------------------------------------------------------------
+rule create_entity_lists:
+        input:
+                beta="data/current/kora/methylation/KF4_beta_qn_bmiq.RData",
+                cosmo="data/current/meQTLs/cosmopairs_combined_151216.RData"
+        output:
+                beta="results/current/measured-cpgs.txt",
+                cosmo_cpg="results/current/cosmo-cpgs.txt",
+                cosmo_snp="results/current/cosmo-snps.txt"
+        threads: 1
+        resources:
+                mem_mb = 7000
+        params:
+                time = "00:30:00"
+        log:
+                "logs/create_entity_lists.log"
+        script:
+                "../R/extract-cpg-ids.R"
+
+# ------------------------------------------------------------------------------
+# Generates input pairs for HiC enrichment runs
+# ------------------------------------------------------------------------------
+rule generate_enrichment_pairs:
+	input:
+		pruned = "data/current/meQTLs/all_r02_110417.RData",
+		cosmo = "data/current/meQTLs/cosmopairs_combined_151216.RData"
+	output:
+		HIC_RESULT_DIR + "pairs_to_analyze/{category}_pairs.tsv"
+	threads: 1
+	resources:
+		mem_mb = 4000
+	params:
+		time = "00:20:00"
+	log:
+		"logs/tad_hic_enrichment/generate_enrichment_pairs/{category}.log"
+	benchmark:
+		"benchmarks/tad_hic_enrichment/generate_enrichment_pairs/{category}.bmk"
+	script:
+		"../R/tad_hic_enrichment/generate_enrichment_pairs.R"
+
+# ------------------------------------------------------------------------------
+# Generic rule to perform enrichment on arbitrary pairs
+# Actual pairs have to be provided in the 'pairs' input and should contain 
+# four columns: sentinel.snp, snps, sentinel.cpg, cpgs; providing for each
+# 'sentinel pair' the original list of snps and cpgs. 
+# Currently, to analyze a different set of pairs one has to duplicate the rule,
+# rename accordingly and adjust the 'pairs' input file as desired.
+# ------------------------------------------------------------------------------
+rule enrich_meqtl_hic:
+        input:
+                pchic="data/current/javierre_2016/PCHiC_peak_matrix_cutoff5.tsv",
+                hic=HIC_RESULT_DIR + "tag_counts/{res}/merged_gte3.txt",
+                tads=HIC_RESULT_DIR+"TADs_merged.bed",
+                pairs="results/current/javierre/pairs_to_analyze/{category}_pairs.tsv",
+                cpg_info="results/current/cosmo-cpgs.txt",
+                cpgs_measured="results/current/measured-cpgs.txt",
+                snp_info="results/current/cosmo-snps.txt",
+                msd="results/current/cpg_msd/lolipop.rds",
+                allele_freqs="results/current/allele_frequencies/lolipop.rds",
+        output:
+                HIC_RESULT_DIR + "{category}_enrichment/{res}/iteration{i}.RData"
+        resources:
+                mem_mb=2000
+        threads: 16
+        params:
+                dist_tolerance=10000,
+                hic_ext=1000,
+                time = "05:00:00"
+        log:
+                "logs/enrich_meqtl/{category}_res{res}_iter{i}.log"
+        benchmark:
+                "benchmarks/enrich_meqtl/{category}_res{res}_iter{i}.bmk"
+        script:
+                "../R/tad_hic_enrichment/enrich_tad_hic.R"
+
+# -----------------------------------------------------------------------------
+# target rule to calculate all enrichment iterations
+# -----------------------------------------------------------------------------
+rule all_hic:
+  input:
+		expand(HIC_RESULT_DIR + "trans_enrichment/50000/iteration{i}.RData", i=ITERS)
+  	expand(HIC_RESULT_DIR + "longrange_enrichment/50000/iteration{i}.RData", i=ITERS)
