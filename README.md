@@ -13,6 +13,7 @@ Table of Contents
    * [Functional analyses of meQTLs](#functional-analyses-of-meqtls)
       * [Chromatin state enrichment](#chromatin-state-enrichment)
       * [HiC enrichment](#hic-enrichment)
+      * [Regulator enrichment](#regulator-enrichment)
       * [Enrichment of transcription factor binding sites at trans-meQTL CpG sites](#enrichment-of-transcription-factor-binding-sites-at-trans-meqtl-cpg-sites)
       * [Network analysis](#network-analysis)
    * [Identification of iQTL](#identification-of-iqtl)
@@ -29,6 +30,10 @@ Table of Contents
 ### HiC enrichment
 
 All details for the HiC contact enrichment are provided in a separate [README](hic_enrichment/README.md).
+
+### Regulator enrichment
+
+Enrichment of (epigenetic) regulator sets provided in the Lemire et al. 2015 Nat Comms paper, see [regulator_enrichment/](./regulator_enrichment/)
 
 ### Enrichment of transcription factor binding sites at trans-meQTL CpG sites
 

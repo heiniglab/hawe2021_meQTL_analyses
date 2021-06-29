@@ -1,0 +1,17 @@
+# list of trans regulators
+# We manually extracted the list of regulators from supplementary table 4 of the paper
+# (first column) and copied it without further processing to:
+# 'epigenetic_trans_regulators.txt'
+
+# nrg2538-s3.txt
+# This file was downloaded from the paper "A census of human transcription factors: function, expression and evolution",
+# by Vaquerizas et al. 2009 . It contains a list of manually curated transcription factors used in lemire
+# et al. 2015 for the evaluation of their SNP loci
+# The 'x' classified TFs are low confidence/probably no TFs according to the supplement,
+# so we remove them (also, they make problems when trying to read them in in R)
+grep '^x' -v nrg2538-s3.txt > nrg2538-s3-no-x.txt
+
+# To get the list of TFs for which to enrich, we extract classes 'a' and 'b' of the
+# provided file. This gave the most similar number of TFs... (we cant reproduce the Lemire number
+# of 1225 loci encoding TFs)
+grep -P "^a\\t|^b\\t" nrg2538-s3.txt | cut -f 6 | sort | uniq > curated_tfs.txt
