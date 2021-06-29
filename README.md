@@ -16,6 +16,7 @@ Table of Contents
       * [Enrichment of transcription factor binding sites at trans-meQTL CpG sites](#enrichment-of-transcription-factor-binding-sites-at-trans-meqtl-cpg-sites)
       * [Network analysis](#network-analysis)
    * [Identification of iQTL](#identification-of-iqtl)
+   * [EPIC comparison](#epic-comparison)
 
 ## Identification of meQTLs
 
@@ -57,4 +58,7 @@ Code for the network analysis based on random walks is provided in the R package
 
 ## Identification of iQTL
 
+## EPIC comparison
 
+We investigated to which degree the increased coverage and resolution of the EPIC array could impact our conclusions from the 1) cis regulatory element enrichment and 2) TFBS enrichment analyses.
+The scripts to calculate and compare the enrichments for the original 450k and the new EPIC meQTL pairs are deposited under [epic_comparison/](epic_comparison/)
