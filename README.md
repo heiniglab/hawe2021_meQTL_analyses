@@ -5,6 +5,16 @@ Citation:
 Hawe et al 2021 Nature Genetics
 ```
 
+Table of Contents
+=================
+
+   * [Identification of meQTLs](#identification-of-meqtls)
+   * [Identification of eQTMs](#identification-of-eqtms)
+   * [Functional analyses of meQTLs](#functional-analyses-of-meqtls)
+      * [Enrichment of transcription factor binding sites at trans-meQTL CpG sites](#enrichment-of-transcription-factor-binding-sites-at-trans-meqtl-cpg-sites)
+      * [Network analysis](#network-analysis)
+   * [Identification of iQTL](#identification-of-iqtl)
+
 ## Identification of meQTLs
 
 ## Identification of eQTMs
