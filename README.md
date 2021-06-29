@@ -9,6 +9,7 @@ Table of Contents
 =================
 
    * [Identification of meQTLs](#identification-of-meqtls)
+      * [EPIC meQTL](#epic-meqtl)
    * [Identification of eQTMs](#identification-of-eqtms)
    * [Functional analyses of meQTLs](#functional-analyses-of-meqtls)
       * [Chromatin state enrichment](#chromatin-state-enrichment)
@@ -20,6 +21,12 @@ Table of Contents
    * [EPIC comparison](#epic-comparison)
 
 ## Identification of meQTLs
+
+
+### EPIC meQTL
+
+We ran a smaller analysis to evaluate the potential impact of the higher coverage and density of the EPIC array on our analyses.
+We ran a separate meQTL pipeline using the available KORA EPIC data, details can be found under [epic_meqtl/](epic_meqtl/).
 
 ## Identification of eQTMs
 

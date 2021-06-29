@@ -1,0 +1,10 @@
+{
+        "maf" : "0.01",
+	"post_maf" : "0.01",
+	"cisDist" : "1e6",
+	"pvThresholdCis" : "1",
+	"pvThresholdTrans" : "1e-5",
+	"pv_cutoff_replication" : "5e-2",
+	"pv_cutoff_discovery" : "1e-14"
+}
+

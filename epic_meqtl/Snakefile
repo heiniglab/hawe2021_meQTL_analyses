@@ -1,0 +1,617 @@
+import glob
+configfile: "configs/workflow.json"
+
+# ------------------------------------------------------------------------------
+# Get list of available chromosomes and sliced methylation data
+# ------------------------------------------------------------------------------
+all_chrs = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", 
+	"chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22"]
+
+# define some output paths as to discern between different cutoffs
+base = "results/current/maf" + config["maf"] + "_cis" + config["pvThresholdCis"] + "_trans" + config["pvThresholdTrans"] + "_sig" + config["pv_cutoff_replication"] + "_postMAF" + config["post_maf"] + "/"
+
+dosage_output = base + "dosages/"
+matrix_eqtl_input = base + "matrixEQTL_inputs/"
+matrix_eqtl_output = base + "matrixEQTL_outputs/"
+meqtl_output = base + "meqtls/"
+comparison_output = base + "comparison/"
+sentinel_match_output = base + "epic_with_sentinels/"
+
+# can only be used after 'all_dosage_to_matrixEQTL' has been run successfully
+GENO = glob_wildcards(matrix_eqtl_input + "genotypes_{chr}.tsv.split_{chunk}")
+METH = glob_wildcards("data/kora_methylation/sliced_data/beta_sliced_{slice}.RData")
+
+wildcard_constraints:
+	category = "cis|longrange|trans",
+	chr = "chr[0-9X]+"
+
+# ------------------------------------------------------------------------------
+# Meta rule to get all matrixEQTL input files from the dosage files. Needs to be
+# run before calling the 'all' rule
+# TODO: implement this as a subworkflow for automatic linking
+# ------------------------------------------------------------------------------
+rule all_dosage_to_matrixEQTL:
+	input:
+		snp_pos = expand(matrix_eqtl_input + "snp_positions_{chr}.tsv", zip, chr = all_chrs)
+	output:
+		matrix_eqtl_input + "all_snp_positions.tsv"
+	shell:
+		"""
+		cat {input.snp_pos} > {output}
+		"""
+
+# ------------------------------------------------------------------------------
+# Target rule to run complete workflow (uses output definitions from
+# 'run_matrixeqtl' rule)
+# ------------------------------------------------------------------------------
+rule all:
+	input:
+		comparison_output + "missing_pairs_cis.tsv"
+
+# ------------------------------------------------------------------------------
+# Helper method to get the correct impute2 files per chromosome.
+# ------------------------------------------------------------------------------
+def impute_files_by_chr(wildcards):
+	path = "data/kora_genotypes/KORAS4F4_N3788_{chr}_*_notmonomorph.impute2.gz".format(chr=wildcards.chr)
+	res = glob.glob(path)
+	return(res)
+
+# ------------------------------------------------------------------------------
+# Convert impute2 files to dosage files, combine chromosome splits on the way.
+# Also filters for MAF according to the set configuration value.
+# ------------------------------------------------------------------------------
+rule impute_to_dosage:
+	input:
+		impute_files_by_chr
+	output:
+		dosage_output + "{chr}_dosage.gz"
+	threads: 1
+	resources:
+		mem_mb = 500
+	params:
+		maf=config["maf"]
+	shell:
+		"""
+		zcat {input} | ./scripts/impute2dosage.py -m {params.maf} |\
+		  sed -E 's/^[a-zA-Z0-9-]+\t/{wildcards.chr}\t/' |\
+		  bgzip -c > {output}
+		"""
+
+# ------------------------------------------------------------------------------
+# Meta rule to get all dosage files from the impute2 inputs
+# ------------------------------------------------------------------------------
+rule all_impute_to_dosage:
+	input:
+		expand(dosage_output + "{chr}_dosage.gz", chr = all_chrs)
+
+# ------------------------------------------------------------------------------
+# Annotate SNPs with MAF information.
+# ------------------------------------------------------------------------------
+rule annotate_maf:
+	input:
+		dosage_files=expand(dosage_output + "{chr}_dosage.gz", chr=all_chrs)
+	output:
+		annotation = "results/current/snp_annotation.rds"
+	threads: 1
+	resources:
+		mem_mb = 10000
+	log:
+		"logs/annotate_maf.log"
+	benchmark:
+		"benchmarks/annotate_maf.bmk"
+	script:
+		"scripts/annotate_snps_maf.R"
+
+# ------------------------------------------------------------------------------
+# Prepare our covariates to be used with matrixEQTL. Specify correct ordering
+# and select specific covariates.
+# ------------------------------------------------------------------------------
+rule prepare_covariates:
+	input:
+		idmap = "data/pv_108_12g_rev.csv",
+		geno_indiv = "data/kora_genotypes/KORAS4F4_N3788_list_of_individuals.txt",
+		houseman = "data/kora_methylation/houseman/houseman_estimates_minfi_KFF4.csv",
+		covariates = "data/K03119g_Waldenberger_tra20190415.csv",
+		technical_variables = "data/kora_methylation/technical_variables/control_probe_pcs_KFF4.1888.RData",
+		platebatch = "data/kora_methylation/technical_variables/KFF4_PlateChip_1888.RData",
+		indiv_ignore = "data/meth_indiv_to_remove.txt"
+	output:
+		geno_id_ordering = "results/current/geno_id_ordering.tsv",
+		geno_ids = "results/current/geno_ids.tsv",
+		meth_ids = "results/current/meth_ids.tsv",
+		covariates = matrix_eqtl_input + "covariates.tsv"
+	threads: 1
+	resources:
+		mem_mb = 1000
+	log:
+		"logs/prepare_covariates.log"
+	script:
+		"scripts/prepare_covariates.R"
+
+# ------------------------------------------------------------------------------
+# Convert our methylation RData files to matrixEQTL readable TSV files.
+# ------------------------------------------------------------------------------
+rule methylation_to_matrixEQTL:
+	input:
+		meth = "data/kora_methylation/sliced_data/beta_sliced_{slice}.RData",
+		meth_ids = "results/current/meth_ids.tsv"
+	output:
+		meth = matrix_eqtl_input + "methylation_sliced_{slice}.tsv",
+		cpg_pos  = matrix_eqtl_input + "methylation_sliced_cpg_positions_{slice}.tsv"
+	threads: 1
+	resources:
+		mem_mb = 2000
+	log:
+		"logs/methylation_to_matrixEQTL_slice{slice}.log"
+	script:
+		"scripts/methylation_to_matrixEQTL.R"
+
+# ------------------------------------------------------------------------------
+# Meta target to get all methylation data format for matrixEQTL
+# ------------------------------------------------------------------------------
+rule all_methylation_to_matrixEQTL:
+	input:
+		cpg_pos  = expand(matrix_eqtl_input + "methylation_sliced_cpg_positions_{slice}.tsv", slice = METH.slice)
+	output:
+		matrix_eqtl_input + "all_cpg_positions.tsv"
+	shell:
+		"""
+		cat {input.cpg_pos} | grep -v "start" > {output}
+		"""
+
+# ------------------------------------------------------------------------------
+# Convert the genotype dosage files to matrixEQTL readable TSV files. Also takes
+# care of ordering the columns (individuals) of the genotype file such that they
+# are in the same order as the methylation data and covariates.
+# ------------------------------------------------------------------------------
+rule dosage_to_matrixEQTL:
+	input:
+		ordering = "results/current/geno_id_ordering.tsv",
+		dosage_file = dosage_output + "{chr}_dosage.gz"
+	output:
+		snp_ids = matrix_eqtl_input + "snp_ids_{chr}.txt",
+		snp_positions = matrix_eqtl_input + "snp_positions_{chr}.tsv",
+		genotypes_matrixEQTL = matrix_eqtl_input + "genotypes_{chr}.tsv"
+	threads: 1
+	params:
+		chunk_size = 100000,
+		geno_split_prefix = matrix_eqtl_input + "genotypes_{chr}.tsv.split_",
+		snp_pos_split_prefix = matrix_eqtl_input + "snp_positions_{chr}.tsv.split_"
+	resources:
+		mem_mb = 2000
+	shell:
+		"""
+		echo "Extracting SNP ids."
+		zcat {input.dosage_file} | cut -f 2 > {output.snp_ids}
+
+		echo "Getting SNP locations"
+		zcat {input.dosage_file} | cut -d "\t" -f 2,3 | \
+                  awk '{{OFS="\t"}} {{print $1,"{wildcards.chr}",$2}}' >> \
+		  {output.snp_positions}
+
+		echo "Remove additional columns and order by given ordering, add SNP ids"
+		key=$(cat {input.ordering} | tr '\n' ':' | sed 's/.$//')
+
+		zcat {input.dosage_file} | cut -f 1,2,3,4,5 --complement | \
+		  awk -v key="$key" -f scripts/reorder.awk | \
+		  paste -d "\t" {output.snp_ids} - > {output.genotypes_matrixEQTL}
+
+		echo "Splitting matrixEQTL input files into chunks"
+		split -l {params.chunk_size} {output.genotypes_matrixEQTL} {params.geno_split_prefix}
+		split -l {params.chunk_size} {output.snp_positions} {params.snp_pos_split_prefix}
+
+		"""
+
+# ------------------------------------------------------------------------------
+# Run matrixEQTL given our prepared files. 
+# ------------------------------------------------------------------------------
+rule run_matrixeqtl:
+	input:
+		snp_pos = matrix_eqtl_input + "snp_positions_{chr}.tsv.split_{chunk}",
+		cpg_pos = matrix_eqtl_input + "methylation_sliced_cpg_positions_{slice}.tsv",
+		meth = matrix_eqtl_input + "methylation_sliced_{slice}.tsv",
+		geno = matrix_eqtl_input + "genotypes_{chr}.tsv.split_{chunk}",
+		cvrt = matrix_eqtl_input + "covariates.tsv"
+	output:
+		cis_associations = matrix_eqtl_output + "{chr}_chunk{chunk}_meth{slice}_cis_associations.out",
+		trans_associations = matrix_eqtl_output + "{chr}_chunk{chunk}_meth{slice}_trans_associations.out",
+		matrixeqtl = matrix_eqtl_output + "{chr}_chunk{chunk}_meth{slice}.rds"
+	params:
+		cisdist = config["cisDist"],
+		pvThresholdTrans = config["pvThresholdTrans"],
+		pvThresholdCis = config["pvThresholdCis"]
+	threads: 6
+	resources:
+		mem_mb = 12000
+	log:
+		"logs/matrixEQTL/{chr}_chunk{chunk}_meth{slice}.log"
+	benchmark:
+		"benchmarks/matrixEQTL/{chr}_chunk{chunk}_meth{slice}.bmk"
+	script:
+		"scripts/run_matrixEQTL.R"
+
+# ------------------------------------------------------------------------------
+# Metatarget to run all matrixEQTL jobs
+# ------------------------------------------------------------------------------
+rule all_run_matrixEQTL:
+	input:
+		cis=expand(expand(matrix_eqtl_output + "{{chr}}_chunk{{chunk}}_meth{slice}_cis_associations.out",
+		       slice=METH.slice), zip, chr=GENO.chr, chunk=GENO.chunk),
+		trans=expand(expand(matrix_eqtl_output + "{{chr}}_chunk{{chunk}}_meth{slice}_trans_associations.out",
+		       slice=METH.slice), zip, chr=GENO.chr, chunk=GENO.chunk)
+
+# ------------------------------------------------------------------------------
+# Merge cis/trans files and filter for significant associations separate for 
+# each chr. 
+# NOTE: while in principal the code below works, we had issues calling it 
+# via snakemake, probably due to the large number of input files. The 'by chr'
+# approach is to try to avoid the issues.
+# To call it manually, e.g. use:
+# header="SNP\tcpg\tbeta\tt-stat\tp-value"
+# (echo -e $header ; awk '{if($5+0 <= 1e-5) print; }' results/current/matrixEQTL_outputs/*_cis_associations.out ) | gzip -c > results/current/cis_associations_p1e-5.tsv.gz
+# ------------------------------------------------------------------------------
+rule merge_significant_by_chr:
+	input:
+		cis=expand(expand(matrix_eqtl_output + "{{chr}}_chunk{{chunk}}_meth{slice}_cis_associations.out",
+		       slice=METH.slice), zip, chr=GENO.chr, chunk=GENO.chunk),
+		trans=expand(expand(matrix_eqtl_output + "{{chr}}_chunk{{chunk}}_meth{slice}_trans_associations.out",
+		       slice=METH.slice), zip, chr=GENO.chr, chunk=GENO.chunk)
+	output:
+		cis = meqtl_output + "cis_associations_{chr}_replication.tsv",
+		trans = meqtl_output + "trans_associations_{chr}_replication.tsv"
+	params:
+		pv_cutoff=config["pv_cutoff_replication"],
+		input_dir = matrix_eqtl_output
+	shell:
+		"""
+		# reset the matrixEQTL header, change 'gene' to 'cpg'
+
+		header='SNP\tcpg\tbeta\tt-stat\tp-value'
+                pattern={params.input_dir}{wildcards.chr}
+
+		(echo -e ${{header}} ; awk '{{if($5+0 <= {params.pv_cutoff}) print;}}' ${{pattern}}_*_cis_associations.out) > {output.cis}
+		(echo -e ${{header}} ; awk '{{if($5+0 <= {params.pv_cutoff}) print;}}' ${{pattern}}_*_trans_associations.out) > {output.trans}
+
+		"""
+
+rule merge_chromosomes:
+	input:
+		cis = expand(meqtl_output + "cis_associations_{chr}_replication.tsv", chr = all_chrs),
+		trans = expand(meqtl_output + "trans_associations_{chr}_replication.tsv", chr = all_chrs)
+	output:
+		cis = meqtl_output + "cis_associations_replication.tsv",
+		trans = meqtl_output + "trans_associations_replication.tsv"
+	shell:
+		"""
+		cat {input.cis} > {output.cis}
+		cat {input.trans} > {output.trans}
+		"""
+
+# ------------------------------------------------------------------------------
+# Extract only the associations present in the ST1 from the matrixEQTL results
+# ------------------------------------------------------------------------------
+rule extract_st1_pairs:
+	input:
+		st1="results/current/st1_pairs.tsv",
+		cis=meqtl_output + "cis_associations_replication.tsv",
+		trans=meqtl_output + "trans_associations_replication.tsv"
+	output:
+		cis_in_st1 = meqtl_output + "cis_associations_in_st1.tsv",
+		trans_in_st1 = meqtl_output + "trans_associations_in_st1.tsv",
+		combined = meqtl_output + "all_associations_in_st1.tsv"
+	shell:
+		"""
+		header="SNP\tcpg\tbeta\tt-stat\tp-value"
+
+		(echo -e ${{header}} ; fgrep -w -f {input.st1} {input.cis} ) > {output.cis_in_st1}
+		(echo -e ${{header}} ; fgrep -w -f {input.st1} {input.trans} ) > {output.trans_in_st1}
+		(echo -e ${{header}} ; grep -h -v SNP {output.cis_in_st1} {output.trans_in_st1} ) > {output.combined}
+		"""
+
+# ------------------------------------------------------------------------------
+# Filter EPIC discovery associations, i.e. not meant for performing 450k 
+# replication analysis but to do further downstream analyses
+# ------------------------------------------------------------------------------
+rule extract_discovery_pairs:
+	input:
+		cis=meqtl_output + "cis_associations_replication.tsv",
+		trans=meqtl_output + "trans_associations_replication.tsv"
+	output:
+		combined = meqtl_output + "all_associations_discovery.tsv"
+	params:
+		pv_cutoff = config["pv_cutoff_discovery"]
+	shell:
+		"""
+		header="SNP\tcpg\tbeta\tt-stat\tp-value"
+
+		(echo -e ${{header}} ; awk '{{ if($5+0 <= {params.pv_cutoff} ) print; }}' {input.cis} {input.trans} ) > {output.combined}
+
+		"""
+
+rule extract_discovery_pairs_epic:
+	input:
+		combined = meqtl_output + "all_associations_discovery.tsv",
+		common_probes = "results/current/common_probes.txt"
+	output:
+		temp_probes = temp("results/current/common_probes_singleCol.tsv"),
+		epic_specific = meqtl_output + "all_associations_discovery_epic_specific.tsv"
+	shell:
+		"""
+		cut -f 2 {input.common_probes} > {output.temp_probes}
+		header="SNP\tcpg\beta\t-stat\p-value"
+		( echo -e ${{header}} ; fgrep -v -w -f {output.temp_probes} {input.combined} ) > {output.epic_specific}
+		"""
+
+# ------------------------------------------------------------------------------
+# Final processing for cis meQTLs. Adds position information for 
+# all entities
+# ------------------------------------------------------------------------------
+rule create_full_result_table:
+	input:
+		annot = "results/current/snp_annotation.rds", 
+		meqtls = meqtl_output + "all_associations_discovery_epic_specific.tsv",
+		snp_positions = matrix_eqtl_input + "all_snp_positions.tsv",
+		cpg_positions = matrix_eqtl_input + "all_cpg_positions.tsv",
+		polymorphic_probes = "data/mccartney-et-al-2016/1-s2.0-S221359601630071X-mmc1.txt",
+		cross_hyb_cpg_probes = "data/mccartney-et-al-2016/1-s2.0-S221359601630071X-mmc2.txt",
+		cross_hyb_noncpg_probes = "data/mccartney-et-al-2016/1-s2.0-S221359601630071X-mmc3.txt",
+	output:
+		meqtls = meqtl_output + "all_associations_discovery_epic_specific_annotated.tsv",
+	threads: 1
+	params:
+		post_maf = config["post_maf"],
+	resources:
+		mem_mb = 20000
+	log:
+		"logs/create_full_result_table_cis.log"
+	benchmark:
+		"benchmarks/create_full_result_table_cis.bmk"
+	script:
+		"scripts/create_full_result_table.R"
+
+# ------------------------------------------------------------------------------
+# Extract the set of probes common to the 450k and the EPIC arrays
+# ------------------------------------------------------------------------------
+rule extract_common_probes:
+	input:
+		a450k_beta = "data/kora_methylation_450k/KF4_beta_qn_bmiq.RData",
+		epic_beta = "data/kora_methylation/KFF4_beta_qn_pipeline_zz.RData",
+	output:
+		result = "results/current/common_probes.txt"
+	threads: 1
+	script:
+		"scripts/extract_common_probes.R"
+
+# ------------------------------------------------------------------------------
+# Compare the results from the 450k and the EPIC array (only significant ones)
+# NOTE: This is to check mere replication of associations. To get the beta
+# scatter plots check out the 'create_effect_comparison_plot' rule below
+# ------------------------------------------------------------------------------
+rule compare_450k_to_epic:
+	input:
+		common_probes = "results/current/common_probes.txt",
+		a450k_disco = "data/benni.lehne/st1_v2.txt",
+		epic_in_st1 = meqtl_output + "all_associations_in_st1.tsv"
+	output:
+		missing_pairs_cis = comparison_output + "missing_pairs_cis.tsv",
+		missing_snps_cis = comparison_output + "missing_snps_cis.txt",
+		missing_cpgs_cis = comparison_output + "missing_cpgs_cis.txt",
+		missing_pairs_longrange = comparison_output + "missing_pairs_longrange.tsv",
+		missing_snps_longrange = comparison_output + "missing_snps_longrange.txt",
+		missing_cpgs_longrange = comparison_output + "missing_cpgs_longrange.txt",
+		missing_pairs_trans = comparison_output + "missing_pairs_trans.tsv",
+		missing_snps_trans = comparison_output + "missing_snps_trans.txt",
+		missing_cpgs_trans = comparison_output + "missing_cpgs_trans.txt",
+	threads: 1
+	log:
+		"logs/compare_450k_to_epic.log"
+	benchmark:
+		"benchmarks/compare_450k_to_epic.bmk"
+	script:
+		"scripts/compare_450k_to_EPIC.R"
+
+# ------------------------------------------------------------------------------
+# Extract genotype and metylation data for the missing pairs 
+# ------------------------------------------------------------------------------
+rule extract_missing_data:
+	input:
+		snps = comparison_output + "missing_snps_{category}.txt",
+		cpgs = comparison_output + "missing_cpgs_{category}.txt"
+	output:
+		geno = matrix_eqtl_input + "genotypes_missing_{category}.tsv",
+		snp_pos = matrix_eqtl_input + "snp_positions_missing_{category}.tsv",
+		meth = matrix_eqtl_input + "methylation_missing_{category}.tsv",
+		cpg_pos = matrix_eqtl_input + "cpg_positions_missing_{category}.tsv"
+	params:
+		geno_pattern = matrix_eqtl_input + "genotypes_chr*.tsv",
+		snp_pos_pattern = matrix_eqtl_input + "snp_positions_chr*.tsv",
+		meth_pattern = matrix_eqtl_input + "methylation_sliced_[1-9]*.tsv",
+		cpg_pos_pattern = matrix_eqtl_input + "methylation_sliced_cpg_positions_*.tsv"
+	shell:
+		"""
+		fgrep -w -h -f {input.snps} {params.geno_pattern} > {output.geno}
+		fgrep -w -h -f {input.snps} {params.snp_pos_pattern} > {output.snp_pos}
+		fgrep -w -h -f {input.cpgs} {params.meth_pattern} > {output.meth}
+		fgrep -w -h -f {input.cpgs} {params.cpg_pos_pattern} > {output.cpg_pos}
+		"""
+
+# ------------------------------------------------------------------------------
+# Run matrixEQTL on missing pairs. 
+# ------------------------------------------------------------------------------
+rule run_matrixeqtl_missing:
+	input:
+		snp_pos = matrix_eqtl_input + "snp_positions_missing_{category}.tsv",
+		cpg_pos = matrix_eqtl_input + "cpg_positions_missing_{category}.tsv",
+		meth = matrix_eqtl_input + "methylation_missing_{category}.tsv",
+		geno = matrix_eqtl_input + "genotypes_missing_{category}.tsv",
+		cvrt = matrix_eqtl_input + "covariates.tsv"
+	output:
+		cis_associations = matrix_eqtl_output + "cis_associations_missing_{category}.tsv",
+		trans_associations = matrix_eqtl_output + "trans_associations_missing_{category}.tsv",
+		matrixeqtl = matrix_eqtl_output + "missing_{category}.rds"
+	params:
+		cisdist = config["cisDist"],
+		pvThresholdTrans = 1,
+		pvThresholdCis = 1
+	threads: 20
+	resources:
+		mem_mb = 120000
+	log:
+		"logs/matrixEQTL/missing_{category}.log"
+	benchmark:
+		"benchmarks/matrixEQTL/missing_{category}.bmk"
+	script:
+		"scripts/run_matrixEQTL.R"
+
+# ------------------------------------------------------------------------------
+# Finally, we can extract only the missing associations from the matrixEQTL
+# results
+# ------------------------------------------------------------------------------
+rule extract_missing_associations:
+	input:
+		cis = matrix_eqtl_output + "cis_associations_missing_cis.tsv",
+		cis_pairs = comparison_output + "missing_pairs_cis.tsv",
+		longrange = matrix_eqtl_output + "trans_associations_missing_longrange.tsv",
+		longrange_pairs = comparison_output + "missing_pairs_longrange.tsv",
+		trans = matrix_eqtl_output + "trans_associations_missing_trans.tsv",
+		trans_pairs = comparison_output + "missing_pairs_trans.tsv"
+	output:
+		comparison_output + "missing_associations_combined.tsv"
+	shell:
+		"""
+		 (head -n 1 {input.cis} ; \
+                   fgrep -w -f {input.cis_pairs} {input.cis} ; \
+                   fgrep -w -f {input.longrange_pairs} {input.longrange} ; \
+                   fgrep -w -f {input.trans_pairs} {input.trans} ) > {output}
+		"""
+
+# ------------------------------------------------------------------------------
+# Create the final result files for the missing pairs. We do not filter any
+# probes here. We re-use the 'cis' script from the original EPIC calculations
+# above.
+# ------------------------------------------------------------------------------
+rule create_full_result_table_missing:
+        input:
+                annot = "results/current/snp_annotation.rds",
+                meqtls = comparison_output + "missing_associations_combined.tsv",
+                snp_positions = matrix_eqtl_input + "all_snp_positions.tsv",
+                cpg_positions = matrix_eqtl_input + "all_cpg_positions.tsv",
+                polymorphic_probes = "data/mccartney-et-al-2016/1-s2.0-S221359601630071X-mmc1.txt",
+                cross_hyb_cpg_probes = "data/mccartney-et-al-2016/1-s2.0-S221359601630071X-mmc2.txt",
+                cross_hyb_noncpg_probes = "data/mccartney-et-al-2016/1-s2.0-S221359601630071X-mmc3.txt",
+        output:
+                meqtls = comparison_output + "missing_associations_combined_annotated.tsv",
+        threads: 1
+        params:
+                post_maf = config["post_maf"],
+        resources:
+                mem_mb = 13000
+        log:
+                "logs/create_full_result_table_missing.log"
+        benchmark:
+                "benchmarks/create_full_result_table_missing.bmk"
+        script:
+                "scripts/create_full_result_table.R"
+
+
+# ------------------------------------------------------------------------------
+# Create the comparison plot between the 450k meQTLs and respective pairs in the
+# EPIC analysis. Ideally sholud get all (also non significant) associations from
+# the EPIC analysis.
+# ------------------------------------------------------------------------------
+rule create_effect_comparison_plot:
+	input:
+		common_probes = "results/current/common_probes.txt",
+		a450k_disco = "data/benni.lehne/st1_v2.txt",
+		epic_combined = meqtl_output + "all_associations_in_st1.tsv",
+		epic_missing = comparison_output + "missing_associations_combined.tsv"
+	output:
+		plot = comparison_output + "effect_sizes.pdf"
+	log:
+		"logs/create_effect_comparison_plot.log"
+	benchmark:
+		"benchmarks/create_effect_comparison_plot.bmk"
+	script:
+		"scripts/create_effect_comparison_plot.R"
+
+# ------------------------------------------------------------------------------
+# Create a single, large and indexed dosage file for all SNPs. Easier for getting
+# individual genotypes for r2 calculations in downstream analyses.
+# ------------------------------------------------------------------------------
+rule merge_dosages:
+	input:
+		expand(dosage_output + "{chr}_dosage.gz", chr = all_chrs)
+	output:
+		dosage_output + "dosage_combined.gz"
+	shell:
+		"""
+		zcat {input} | sort -k1,1 -k3,3n | bgzip > {output} 
+		# index using tabix, 1: chr; 3: pos
+		tabix -s 1 -b 3 -e 3 {output}
+		"""
+
+rule residualize_methylation:
+	input:
+		methylation = "data/kora_methylation/KFF4_beta_qn_pipeline_zz.RData",
+		houseman = "data/kora_methylation/houseman/houseman_estimates_minfi_KFF4.csv",
+		covariates = "data/K03119g_Waldenberger_tra20190415.csv",
+		idmap = "data/pv_108_12g_rev.csv",
+		platebatch = "data/kora_methylation/technical_variables/KFF4_PlateChip_1888.RData",
+		indiv_ignore = "data/meth_indiv_to_remove.txt"
+	output:
+		result = "results/current/methylation_residualized.rds",
+		result_no_houseman = "results/current/methylation_residualized_no_houseman_and_wbc.rds"
+	log:
+		"logs/residualize_methylation.log"
+	benchmark:
+		"benchmarks/residualize_methylation.bmk"
+	script:
+		"scripts/residualize_methylation.R"
+
+# ------------------------------------------------------------------------------
+# Create the table matching EPIC pairs to the individual sentinel pairs
+# from the original analysis
+# ------------------------------------------------------------------------------
+rule match_epic_with_sentinels:
+	input:
+		geno_indiv = "data/kora_genotypes/KORAS4F4_N3788_list_of_individuals.txt",
+		meth_resid = "results/current/methylation_residualized.rds",
+		dosage = dosage_output + "dosage_combined.gz",
+		epic_pairs = meqtl_output + "all_associations_discovery_annotated.tsv",
+		sentinel_pairs = "data/benni.lehne/all_r02_110417_combined.tsv",
+		snp_annotation = "results/current/snp_annotation.rds"
+	output:
+		result = sentinel_match_output + "epic_pairs_with_sentinels.rds"
+	threads:
+		20
+	params:
+		r2_cutoff = 0.2,
+		dist_cutoff = 1e6
+	log:
+		"logs/match_epic_with_sentinels.log"
+	benchmark:
+		"benchmarks/match_epic_with_sentinels.bmk"
+	script:
+		"scripts/match_epic_with_sentinels.R"
+
+
+# ------------------------------------------------------------------------------
+# Extract replicated cosmo pairs
+# ------------------------------------------------------------------------------
+rule extract_pairs_in_cosmo:
+	input:
+		cosmo_pairs = "results/current/cosmo_pairs_nobetas.tsv",
+		epic_associations_cis = meqtl_output + "cis_associations_replication.tsv",
+		epic_associations_trans = meqtl_output + "trans_associations_replication.tsv"
+	output:
+		matched = meqtl_output + "all_associations_in_cosmo.tsv",
+		matched_pairs = meqtl_output + "all_associations_in_cosmo_pairs.tsv",
+		missing = comparison_output + "missing_pairs_cosmo.tsv"
+	shell:
+		"""
+		fgrep -w -h -f {input.cosmo_pairs} {input.epic_associations_cis} {input.epic_associations_trans} > {output.matched}
+
+		cut -f 1,2 {output.matched} > {output.matched_pairs}
+
+                fgrep -w -v -f {output.matched_pairs} {input.cosmo_pairs} > {output.missing}
+		"""
