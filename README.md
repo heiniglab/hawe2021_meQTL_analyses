@@ -1,12 +1,14 @@
 # Code for the meQTL analyses presented in Hawe et al. 2021 Nature Genetics
 
 Citation:
-```
-Hawe et al 2021 Nature Genetics
-```
 
-Table of Contents
-=================
+**Genetic variation influencing DNA methylation provides new insights into the molecular pathways regulating genomic function.**
+
+Johann S Hawe, Rory Wilson, Katharina Schmid, Li Zhou, Lakshmi Lakshmanan, Benjamin C Lehne, Brigitte Kühnel, William R Scott, Matthias Wielscher, Yik Weng Yew, Clemens Baumbach, Dominic P Lee, Eirini Marouli, Manon Bernard, Liliane Pfeiffer, Pamela Matías-García, Matias I Autio, Stephane Bourgeois, Christian Herder, Ville Karhunen, Thomas Meitinger, Holger Prokisch, Wolfgang Rathmann, Michael Roden, Sylvain Sebert, Jean Shin, Konstantin Strauch, Weihua Zhang, Wilson LW Tan, Stefanie M. Hauck, Juliane Merl-Pham, Harald Grallert, Eudes GV Barbosa, MuTHER Consortium, Thomas Illig, Annette Peters, Tomas Paus, Zdenka Pausova, Panos Deloukas, Roger SY Foo, Marjo-Riitta Jarvelin, Jaspal S Kooner, Marie Loh, Matthias Heinig, Christian Gieger, Melanie Waldenberger, and John C Chambers.
+
+
+## Table of Contents
+
 
    * [Identification of meQTLs](#identification-of-meqtls)
       * [EPIC meQTL](#epic-meqtl)
