@@ -72,6 +72,29 @@ Code for the network analysis based on random walks is provided in the R package
 
 ## Identification of iQTL
 
+We tested if meQTL relationships might be influenced by environmental context. For this, we ran interaction analyses for SNP-CpG pairs using linear regression models with an interaction term between SNP and phenotype. 
+
+```
+meth ~ geno + pheno + geno:pheno + covariates
+```
+
+The following phenotypes were examined: smoking (yes/no), BMI and estimated proportions of CD8 T cells, CD4 T cells and monocytes. The analysis was once performed restricted to the cosmopolitan meQTLs and once in a genome-wide cis analysis.
+
+### iQTLs at cosmopolitan meQTLs
+
+### Genome-wide cis-iQTLs
+
+For the genome-wide cis iQTL analysis, we ran the analysis using [tensorqtl](https://github.com/broadinstitute/tensorqtl). We performed the analysis separetly for each cohort and phenotype and parallelized over the chromosomes, submitting to a GPU server with a slurm workload manager (see scripts in `interactionQTL/tensorqtl_runs`), e.g.
+
+```{bash}
+sbatch --array=1-22 interactionQTL/tensorqtl_runs/run_tensorqtl_kora_bmi.sh 
+```
+Afterwards, significant iQTLs were determined using a Bonferroni corrected multiple testing threshold of 0.05 with
+
+```{bash}
+python -u interactionQTL/tensorqtl_runs/filter_iQTLs.py
+```
+
 ## EPIC comparison
 
 We investigated to which degree the increased coverage and resolution of the EPIC array could impact our conclusions from the 1) cis regulatory element enrichment and 2) TFBS enrichment analyses.
