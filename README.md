@@ -12,7 +12,7 @@ Johann S Hawe, Rory Wilson, Katharina Schmid, Li Zhou, Lakshmi Lakshmanan, Benja
 
    * [Identification of meQTLs](#identification-of-meqtls)
       * [EPIC meQTL](#epic-meqtl)
-   * [meQTL replication meDIP-seq](#meqtl-replication:-medip-seq) 
+   * [meQTL replication meDIPseq](#meqtl-replication-medipseq) 
    * [Identification of eQTMs](#identification-of-eqtms)
    * [Functional analyses of meQTLs](#functional-analyses-of-meqtls)
       * [Chromatin state enrichment](#chromatin-state-enrichment)
@@ -30,7 +30,7 @@ Johann S Hawe, Rory Wilson, Katharina Schmid, Li Zhou, Lakshmi Lakshmanan, Benja
 We ran a smaller analysis to evaluate the potential impact of the higher coverage and density of the EPIC array on our analyses.
 We ran a separate meQTL pipeline using the available KORA EPIC data, details can be found under [epic_meqtl/](epic_meqtl/).
 
-## meQTL replication: meDIP-seq
+## meQTL replication: meDIPseq
 
 Identified meQTL were corroborated using several replication analyses.
 The meDIP-seq replcation is provided in a separate repository: [meDIP-seq replication](https://github.com/Rory-R-Wilson/medipseq_replication/)
