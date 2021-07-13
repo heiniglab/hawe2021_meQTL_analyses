@@ -41,7 +41,10 @@ The meDIP-seq replcation is provided in a separate repository: [meDIP-seq replic
 
 ## Identification of eQTMs
 
-## Functional analyses of meQTLs
+## Functional analyses of meQTL CpGs
+CpG sites with meQTL were tested for association with other traits in our cohort. Based on these results meQTL CpG sites were compared to random background CpG sets to test for enrichment of trait associations. Analyses are described here: [cpg_enrichment/](cpg_enrichment/).
+
+## Functional analyses of meQTL pairs
 
 ### Chromatin state enrichment
 
