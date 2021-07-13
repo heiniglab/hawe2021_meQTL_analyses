@@ -3,7 +3,7 @@
 We investigated whether cis-meQTLs are enriched for enhancer/promoter chromHMM states
 as compared to a random, matched background (150 iterations).
 
-The main R-script for this analysis is located under [../R/cre_enrichment/snp_cpg_annotation_overlap_batchjobs.R](snp_cpg_annotation_overlap_batchjobs.R).
+The main R-script for this analysis is located under [snp_cpg_annotation_overlap_batchjobs.R](../R/cre_enrichment/snp_cpg_annotation_overlap_batchjobs.R).
 
 In order to calculate all iterations, a HPC should be used since these are
 some intensive calculations. In our case, we use the *all_snp_cpg_annotation_overlap*
