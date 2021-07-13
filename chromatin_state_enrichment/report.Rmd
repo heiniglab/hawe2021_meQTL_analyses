@@ -1,0 +1,351 @@
+---
+title: "cis-meQTL chromHMM enrichment"
+author: "Johann Hawe"
+date: "5/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(data.table)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(cowplot)
+library(ggpubr)
+library(cowplot)
+library(tidyverse)
+theme_set(theme_cowplot())
+dout_figures <- "results/current/figures/"
+dir.create(dout_figures)
+
+# some discrete colors to be used
+COLORS_QUAL <- RColorBrewer::brewer.pal(3, "Set2")
+```
+
+## cis-meQTL chromHMM enrichment
+
+```{r echo=F}
+fresults <- list.files("results/current/chromHMM_enrichment_slurm/", "*.rds",
+                       full.names = T)
+```
+
+We investigated whether cis-meQTLs are enriched for enhancer/promoter chromHMM states
+as compared to a random, matched background (`r length(fresults)` iterations, 1000 samples per 
+iteration). 
+Background pairs were obtained by matching the meQTL CpG by mean and SD of CpGs beta value
+and the SNP by its MAF (always +/- 0.05 beta and MAF, respectively).
+In addition, distance of the pair was matched, i.e. each background pair needs to
+have the SNP and the CpG on the same chromosome and distance must be within
++/-1000bp as for the observed meQTL pair. In addition, we only used meQTLs for 
+which the CpG was either in a promoter or enhancer chromHMM state, so we further
+only allowed pairs in the background for which either of the pair entities was in 
+a promoter or enhancer state, too.
+
+We first show an overview on the p-values and odds ratios as obtained from 
+a fisher.test (with alternative='g') on the created contingency tables (example shown below). We then
+plot the ratios of the numbers of pairs falling into the same state over the
+number of entities not falling into the same states for both the observed meQTLs
+and the respective background.
+
+```{r echo=F}
+
+results <- lapply(fresults, function(f) {
+  result <- readRDS(f)
+  colnames(result) <- c(
+    "cpg", "snps",
+    "bg_cpg", "bg_snps",
+    "pair_enhancer",
+    "pair_enh_prom",
+    "pair_prom_enh",
+    "pair_promoter",
+    "pair_enhancer_snp",
+    "pair_promoter_snp",
+    "bg_enhancer",
+    "bg_enh_prom",
+    "bg_prom_enh",
+    "bg_promoter",
+    "bg_enhancer_snp",
+    "bg_promoter_snp"
+  )
+  for (i in c(5:8, 11:14)) {
+    result[, i] <- as.numeric(result[, i])
+  }
+
+    
+  # it could happen that we didnt find a match (NAs in data frame)
+  df <- result[complete.cases(cbind(result$bg_cpg, result$bg_snps)),]
+  print(paste0("Final size (non-NA cases) for background: ", 
+               paste(dim(df), collapse=",")))
+  
+  # get percentages
+  total <- nrow(df)
+  enh <- sum(df$pair_enhancer) / total
+  prom <- sum(df$pair_promoter) / total
+  same <- (enh + prom)
+  print("Percentage of pairs in same state:")
+  print(same)
+  
+  enh_prom <- sum(df$pair_enh_prom) / total
+  prom_enh <- sum(df$pair_prom_enh) / total
+  converse <- (enh_prom + prom_enh)
+  
+  # create a contingency table: observed/matched X state concordance
+  pair_same_state <- sum(df$pair_enhancer, df$pair_promoter)
+  pair_different_state <- total - pair_same_state
+  bg_same_state <- sum(df$bg_enhancer, df$bg_promoter)
+  bg_different_state <- total - bg_same_state
+  
+  cont_table <- matrix(c(pair_same_state, pair_different_state,
+                         bg_same_state, bg_different_state), 
+                       ncol=2, byrow = T)
+  colnames(cont_table) <- c("same_state", "different_state")
+  rownames(cont_table) <- c("observed", "background")
+  #print(cont_table)
+  # sanity check
+  rsums <- rowSums(cont_table)
+  if(any(rsums>1000) | any(rsums<800) ) {
+    print(f)
+    print(rsums)
+    warning("Margins too large/small.")
+  }
+  ft <- fisher.test(cont_table, alternative="g")
+  
+  list(contingency = cont_table,
+       pval = ft$p.value,
+       OR = ft$estimate,
+       observed_ratio = cont_table["observed","same_state"] / (cont_table["observed","same_state"] +
+                                                                 cont_table["observed","different_state"]),
+       background_ratio = cont_table["background","same_state"] / (cont_table["background","same_state"] +
+                                                                     cont_table["background","different_state"]))
+})
+
+print("Contingency table example:")
+print(results[[1]]$contingency)
+print("Summary of obtained p-values:")
+print(summary(sapply(results, "[[", "pval")))
+print("Summary of obtained odds ratios:")
+print(summary(sapply(results, "[[", "OR")))
+print("Average fraction in the same state (observed):")
+print(mean(sapply(results, "[[", "observed_ratio")))
+print("Average fraction in the same state (background):")
+print(mean(sapply(results, "[[", "background_ratio")))
+
+toplot <- tibble(`observed (450k)` = sapply(results, "[[", "observed_ratio"),
+                     background = sapply(results, "[[", "background_ratio"))
+toplot <- melt(toplot)
+gp <- ggplot(toplot, aes(x = value)) +
+  geom_freqpoly(aes(color=variable), binwidth=0.01, size=2) +
+  scale_color_brewer(palette = "Set2") +
+  scale_x_continuous(labels=percent_format(), limits=c(0,1)) +
+  labs(x = "percentage in same state \n(promoter or enhancer)",
+       y = "count") + 
+  theme(legend.position = c(0.1,0.8))
+gp
+save_plot(file.path(dout_figures, "chromHMM_cre_enrichment.pdf"),
+         gp, ncol = 1, nrow = 1, base_asp = 1.2)
+
+gp_hist <- ggplot(toplot, aes(x = value)) +
+  geom_histogram(aes(fill=variable), binwidth=0.02) +
+  scale_fill_grey(start = 0.1, end=0.6) +
+  scale_x_continuous(labels=percent_format(), limits=c(0,1)) +
+  background_grid(major="xy") +
+  theme(legend.position = c(0.1,0.9), legend.title = element_blank()) + 
+  labs(x = "percentage in same state \n(promoter or enhancer)",
+       y = "count")
+gp_hist 
+save_plot(file.path(dout_figures, "chromHMM_cre_enrichment_histogram.pdf"),
+         gp_hist, ncol = 1, nrow = 1)
+
+# now we also load the data from the EPIC comparison and create a plot
+# indicating the overlap in these data
+# print basic information immediately
+epic_res <- read_tsv("results/current/cre_enrichment/450k_vs_epic/annotation_overlap_epic.tsv")
+total <- nrow(epic_res)
+same_state <- sum(epic_res$enh_enh, epic_res$prom_prom)
+epic_fraction <- same_state / total
+print("Fraction of pairs in the same state (enhancer/promoter")
+print(epic_fraction)
+
+# also get the single background sampling we performed
+fepic_bg_res <- list.files("results/current/cre_enrichment/450k_vs_epic/", 
+                           "epic_background_iter.*.tsv", 
+                           full.names = T)
+epic_bg_res <- lapply(fepic_bg_res, function(f) {
+  read_tsv(f)
+}) %>% bind_rows()
+
+# need to filter for cpg state in one of our active states to match with
+# 'observed' analysis
+enhancer_states <- c("Genic enhancers", "Enhancers", "Bivalent Enhancer")
+promoter_states <- c("Active TSS", "Flanking Active TSS")
+prom_enh_states <- c(enhancer_states, promoter_states)
+# sanity filter, should already be the case
+epic_bg_res <- filter(epic_bg_res, cpg_state %in% prom_enh_states)
+epic_bg_res1 <- epic_bg_res[1:1000,]
+epic_bg_res2 <- epic_bg_res[1001:2000,]
+epic_bg_res3 <- epic_bg_res[2001:3000,]
+
+# get the fraction of overlaps
+frac <- function(res) {
+  bg_total <- nrow(res)
+  bg_same_state <- sum(res$enh_enh, res$prom_prom)
+  epic_bg_fraction <- bg_same_state / bg_total
+  epic_bg_fraction
+}
+ffull <- frac(epic_bg_res)
+f1 <- frac(epic_bg_res1)
+f2 <- frac(epic_bg_res2)
+f3 <- frac(epic_bg_res3)
+print("Fraction for EPIC background samples is:")
+print(median(c(f1,f2,f3)))
+  
+# create the same plot as before but indicating the new information
+# (used in reviewer response)
+gp2 <- gp + 
+  geom_vline(data=tibble(epic_fraction=epic_fraction), 
+             aes(xintercept = epic_fraction, color = paste0("fraction in EPIC (", 
+                                                            round(epic_fraction, digits=2)*100, "%)"))) + 
+  scale_color_brewer(palette = "Set2", 
+                     breaks=c("observed (450k)", "background", "fraction in EPIC (93%)"))
+gp2
+
+# also, get empirical p-value over all iterations
+ors <- sapply(results, "[[", "OR")
+emp_pv <- (sum(ors<=1) + 1)/(length(fresults)+1)
+print("Empirical p-value:")
+emp_pv
+
+totest <- data.matrix(toplot)
+wilcox.test(value ~ variable, totest, paired=T)
+```
+
+Assuming $H_0: OddsRatio \leq 1$, we can calculate an empirical
+p-value using $$P(D|H_0) = {\sum_{x\in D}{I(x\le1)} + 1  \over N + 1},$$ where 
+$N$ is the total number of iterations/samplings performed, $D$ is the data 
+(obtained Odds Ratios) and $I(A)$ is the indicator function, returning 1 if $A$ 
+evaluates as $TRUE$ and 0 otherwise. 
+We thereby can determine how likely it would be to observe an Odds Ratio in the 
+analysis which would indicate no enrichment of meQTLs where the entities are in
+the same chromHMM states (either both enhancer or both in promoter regions)
+as compared to the matched background.
+In our case, this yields an empirical p-value $$p_{chromHMM} = `r emp_pv`$$.
+
+### Distance distribution of meQTLs in same or different chromHMM states
+```{r}
+# load cpg information
+library(FDb.InfiniumMethylation.hg19)
+cpg_ranges <- FDb.InfiniumMethylation.hg19::get450k()
+
+# chromHMM annotation files
+fsnp_annot <- "results/current/epigenetic_state_annotation_weighted_snps.rds"
+fcpg_annot <- "results/current/enrichment_epigenetic_state_weighted_annotation_all_cpgs.RData"
+
+# define proomter and enhancer regions
+enhancer <- c("Genic enhancers", "Enhancers", "Bivalent Enhancer")
+promoter <- c("Active TSS", "Flanking Active TSS")
+
+print("Preparing cosmo object.")
+load("results/old/cis-cosmopairs_combined_151216.RData")
+cosmo <-
+  cosmo[, c("snp", "snp.chr", "snp.pos", "cpg", "cpg.chr", "cpg.pos")]
+cosmo$snp <- as.character(cosmo$snp)
+cosmo$cpg <- as.character(cosmo$cpg)
+
+print("Preparing chromHMM annotations.")
+env <- new.env()
+load(fcpg_annot, envir = env)
+cpg_annot <- with(env, weighted.annotation.all)
+cpg_annot <- cpg_annot[complete.cases(cpg_annot), ]
+
+snp_annot <- readRDS(fsnp_annot)
+snp_annot <- snp_annot[complete.cases(snp_annot), ]
+
+# get state for each CpG and SNP
+cpg_states <- (sapply(1:nrow(cpg_annot), function(i) {
+  return(names(which.max(cpg_annot[i, ])))
+}))
+names(cpg_states) <- rownames(cpg_annot)
+
+snp_states <- unlist(sapply(1:nrow(snp_annot), function(i) {
+  return(names(which.max(snp_annot[i, ])))
+}))
+names(snp_states) <- rownames(snp_annot)
+
+# annotate states to cosmo object
+cosmo_annot <- mutate(cosmo, snp_state = snp_states[snp], cpg_state = cpg_states[cpg]) %>%
+  mutate(snp_promoter = snp_state %in% promoter, snp_enhancer = snp_state %in% enhancer) %>%
+  mutate(cpg_promoter = cpg_state %in% promoter, cpg_enhancer = cpg_state %in% enhancer) %>%
+  mutate(distance = case_when(snp.chr == cpg.chr ~ abs(snp.pos - cpg.pos)))
+
+# filter for both snp and cpg in enhancer or promoter state and plot distances
+toplot <- filter(cosmo_annot, (snp_enhancer & cpg_enhancer) | 
+                   (snp_promoter & cpg_promoter)) %>%
+  mutate(enhancer_promoter = case_when(snp_enhancer ~ "enhancer",
+                                       snp_promoter ~ "promoter"))
+mdist <- mean(toplot %>% 
+                pull(distance))
+
+mdist_enh <- mean(filter(toplot, enhancer_promoter == "enhancer") %>% 
+                    pull(distance))
+mdist_pro <- mean(filter(toplot, enhancer_promoter == "promoter") %>% 
+                    pull(distance))
+
+# splot splitting enhancer/promoter cases
+gp1_split <- ggplot(toplot, aes(x=distance, fill=enhancer_promoter), alpha=0.5) + 
+  geom_histogram() + 
+  annotate("text", mdist_enh, 60e3, hjust=0, size=5, 
+           label=paste0("mean (enhancer): ", 
+                        scales::scientific_format()(mdist_enh), 
+                        "bp\nmean (promoter): ",
+                        scales::scientific_format()(mdist_pro), 
+                        "bp")) +
+  scale_x_continuous(labels=scales::label_number_si(unit = "bp")) +
+  scale_fill_grey() +
+  theme(legend.position = c(0.8,0.2)) +
+  labs(x="Distance between meQTL SNP and CpG", 
+       fill="state",
+       title = "SNP/CpG in prom-prom or enh-enh states")
+
+# plot showing all data in single histogram
+gp1 <- ggplot(toplot, aes(x=distance), alpha=0.5) + 
+  geom_histogram() + 
+  annotate("text", mdist, 60e3, hjust=0, size=6, 
+           label=paste0("mean: ", 
+                        scales::scientific_format()(mdist), 
+                        "bp")) +
+  scale_x_continuous(labels=scales::label_number_si(unit = "bp"))
+
+# filter for snp and cpg in different states, i.e. where only one entity is 
+# in either promoter or enhancer state and plot distances
+toplot <- filter(cosmo_annot, (snp_enhancer & !(cpg_enhancer | cpg_promoter)) | 
+                   (snp_promoter & !(cpg_enhancer | cpg_promoter)) |
+                   (cpg_promoter & !(snp_enhancer | snp_promoter)) |
+                   (cpg_enhancer & !(snp_enhancer | snp_promoter)))
+mdist <- mean(toplot$distance)
+gp2 <- ggplot(toplot, aes(x=distance)) + 
+  geom_histogram() + 
+  annotate("text", mdist, 5e5, hjust=0, size=6, 
+           label=paste0("mean: ", scales::scientific_format()(mdist), "bp")) +
+  scale_x_continuous(labels=scales::label_number_si(unit = "bp")) +
+  labs(x="distance")
+
+# filter for snp and cpg in different states, where cpg is in promoter and 
+# snp in enhancer or vice versa and plot distances
+toplot <- filter(cosmo_annot, (snp_enhancer & cpg_promoter) |
+                   (cpg_enhancer & snp_promoter))
+mdist <- mean(toplot$distance)
+gp3 <- ggplot(toplot, aes(x=distance)) + 
+  geom_histogram() + 
+  annotate("text", mdist, 5e4, hjust=0, size=6, 
+           label=paste0("mean: ", scales::scientific_format()(mdist), "bp")) +
+  scale_x_continuous(labels=scales::label_number_si(unit = "bp"))
+
+pg <- plot_grid(gp1, gp2, gp3, align = "hv", axis="lt",
+                ncol=3,nrow=1, labels = "AUTO")
+save_plot("results/current/figures/chromHMM_based_distributions.pdf", 
+          pg, base_asp = 1.1,
+          ncol = 3, 
+          nrow=1)
+```

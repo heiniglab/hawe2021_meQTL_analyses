@@ -1,0 +1,38 @@
+localrules: all_snp_cpg_annotation_overlap
+
+# ------------------------------------------------------------------------------
+# Get state overlaps for cis-meQTLs and matched background (SLURM JOB ARRAY)
+# ------------------------------------------------------------------------------
+rule snp_cpg_annotation_overlap_slurm:
+        input:
+                cosmo = "results/current/cis-cosmopairs_combined_151216.RData",
+                cosmo_snps = "results/current/cosmo-snps.txt",
+                cosmo_cpgs = "results/current/cosmo-cpgs.txt",
+                snp_incl = "data/current/meQTLs/snps2include.RData",
+                cpg_incl = "data/current/meQTLs/cpgs2include.RData",
+                cpg_msd = "data/current/meQTLs/msd_lolipop.RData",
+                snp_freq = "results/current/allele_frequencies/kora.rds",
+                snp_annot = "results/current/epigenetic_state_annotation_weighted_snps.rds",
+                cpg_annot = "results/current/enrichment_epigenetic_state_weighted_annotation_all_cpgs.RData"
+        output:
+                matches = "results/current/chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.rds"
+        threads:
+                1
+        resources:
+                mem_mb = 6000
+        params:
+                samplesize = 1000,
+        log:
+                "logs/chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.log"
+        benchmark:
+                "benchmarks/chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.bmk"
+        script:
+                "../R/cre_enrichment/snp_cpg_annotation_overlap_batchjobs.R"
+
+# ------------------------------------------------------------------------------
+# Target rule to perform 150 iterations of the overlap/matched background
+# calculations above
+# ------------------------------------------------------------------------------
+rule all_snp_cpg_annotation_overlap_slurm:
+	input:
+		expand("results/current/chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.rds", iter=range(1,151))
