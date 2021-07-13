@@ -38,7 +38,7 @@ Conditional meQTL analysis and LD pruning is described here: [conditional_analys
 ## meQTL replication: meDIPseq
 
 Identified meQTL were corroborated using several replication analyses.
-The meDIP-seq replcation is provided in a separate repository: [meDIP-seq replication](https://github.com/Rory-R-Wilson/medipseq_replication/)
+The meDIP-seq replcation is provided in a separate repository: [meDIP-seq replication](medipseq_replication/)
 
 ## Identification of eQTMs
 
