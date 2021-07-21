@@ -2,7 +2,31 @@
 
 Code was executed in R version 3.2.0, gtool/0.7.5, plink/1.90
 
-Input files: sigtab.RData, beta.RData, paste(cohort, '_snps.RData', sep='')
+Input files: 
+- sigtab.RData: table of cosmopolitan pairs results (SNP-CpG pairs with P<1E-14); 
+e.g. 
+                 pair        snp snp.chr   snp.pos A1 A2        eaf
+cg12168535_rs10000006 rs10000006       4 108826383  T  C 0.05688892
+cg11612852_rs10000010 rs10000010       4  21618674  T  C 0.52474742
+cg26748440_rs10000010 rs10000010       4  21618674  T  C 0.52474742
+       cpg cpg.chr   cpg.pos  beta.disco    se.disco      p.disco
+cg12168535       4 108931059 -0.01770297 0.002217665 1.431604e-15
+cg11612852       4  21699745  0.01838949 0.002284387 8.274291e-16
+cg26748440       4  21699512  0.01681005 0.001915219 1.677548e-18
+  beta.repl     se.repl       p.repl   beta.comb     se.comb       p.comb
+-0.01201398 0.002403227 5.759799e-07 -0.01508656 0.001629784 2.106832e-20
+ 0.01950864 0.002498423 5.792592e-15  0.01889909 0.001685905 3.639754e-29
+ 0.01481553 0.002318030 1.643399e-10  0.01600088 0.001476459 2.290544e-27
+repli.pop beta.xe.disco se.xe.disco   p.xe.disco beta.xe.comb  se.xe.comb
+        1   -0.06151071 0.004145355 7.576547e-47  -0.02130181 0.001516768
+        1    0.02762564 0.004449315 6.736766e-10   0.01999470 0.001576524
+        1    0.02366820 0.004293891 4.111378e-08   0.01681156 0.001396224
+   p.xe.comb repli.xe pop.disco
+8.359328e-45        1        IA
+7.367963e-37        1        IA
+2.170201e-33        1        IA
+
+- beta.RData, paste(cohort, '_snps.RData', sep='')
 MARIE: please describe what is in there (on a high level)
 
 ```{r}
