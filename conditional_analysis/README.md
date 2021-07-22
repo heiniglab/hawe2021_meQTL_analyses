@@ -412,7 +412,6 @@ save(sigtab, file=paste(tid, '.RData', sep=''))
 
 ## Merge and pruning of CpGs
 
-MARIE: What are these files
 anno.RData: consists of "annometh" and "annosnp" (rsid/cpg, chr, pos)
 
 ```{r}
