@@ -4,30 +4,13 @@ Code was executed in R version 3.2.0, gtool/0.7.5, plink/1.90
 
 Input files: 
 - sigtab.RData: table of cosmopolitan pairs results (SNP-CpG pairs with P<1E-14); 
-e.g. 
-                 pair        snp snp.chr   snp.pos A1 A2        eaf
-cg12168535_rs10000006 rs10000006       4 108826383  T  C 0.05688892
-cg11612852_rs10000010 rs10000010       4  21618674  T  C 0.52474742
-cg26748440_rs10000010 rs10000010       4  21618674  T  C 0.52474742
-       cpg cpg.chr   cpg.pos  beta.disco    se.disco      p.disco
-cg12168535       4 108931059 -0.01770297 0.002217665 1.431604e-15
-cg11612852       4  21699745  0.01838949 0.002284387 8.274291e-16
-cg26748440       4  21699512  0.01681005 0.001915219 1.677548e-18
-  beta.repl     se.repl       p.repl   beta.comb     se.comb       p.comb
--0.01201398 0.002403227 5.759799e-07 -0.01508656 0.001629784 2.106832e-20
- 0.01950864 0.002498423 5.792592e-15  0.01889909 0.001685905 3.639754e-29
- 0.01481553 0.002318030 1.643399e-10  0.01600088 0.001476459 2.290544e-27
-repli.pop beta.xe.disco se.xe.disco   p.xe.disco beta.xe.comb  se.xe.comb
-        1   -0.06151071 0.004145355 7.576547e-47  -0.02130181 0.001516768
-        1    0.02762564 0.004449315 6.736766e-10   0.01999470 0.001576524
-        1    0.02366820 0.004293891 4.111378e-08   0.01681156 0.001396224
-   p.xe.comb repli.xe pop.disco
-8.359328e-45        1        IA
-7.367963e-37        1        IA
-2.170201e-33        1        IA
+header: pair; snp; snp.chr;snp.pos; A1; A2; eaf; cpg; cpg.chr; cpg.pos; beta.disco(very); se.disco; p.disco; beta.repl(ication); se.repl; p.repl; beta.comb(ined); se.comb; p.comb; pop.disco; pop.repli
 
-- beta.RData, paste(cohort, '_snps.RData', sep='')
-MARIE: please describe what is in there (on a high level)
+- beta.RData: consists of "cpgs.beta" (vector of all cpgs on array) and "samples.beta" (vector of all samples included)
+- betaQN_[cohort].RData: matrix (n by m) of quantile-normalised beta (methylation) levels for all cpgs on array (n) for all samples in cohort (m)
+- [cohort]snps.RData: matrix of N snps by 5 columns in cohort (chr, rsid, BP, A1, A2, index)
+- [cohort]gen.bin: gen (genotype) file of snps listed in [cohort]snps.RData in cohort 
+
 
 ```{r}
 require(meta)
@@ -69,7 +52,8 @@ for(cohort in cohorts){
 		assign(paste(cohort, '.beta', sep=''), beta)
 	}
 
-	#genotypes
+	#genotypes; converts to dosage
+	to.read = file(paste('/project/lolipop_b/METHQTL2/STUFF/PRUNE/COND2/DATA/', cohort, '_gen.bin', sep=''), "rb") 
 	load(paste(cohort, '_snps.RData', sep='')) 
 	snp.anno=snps[snps$rsid %in% rsigtab$snp,]
 	rownames(snp.anno)=as.character(snp.anno$rsid)
@@ -270,7 +254,13 @@ write.table(cond.snps, file='cond.snps', quote=F, row.names=F, col.names=F)
 ```
 
 
-## MARIE: please explain what this block here is doing and what input it takes
+## Input files
+- [cohort].gen.gz: gen file for each cohort
+
+Remove list of indels if applicable/available (using indels.txt) 
+Converts via PLINK from .gen to .ped and .map format 
+Applies a threshold of 0.98 for calling genotypes for calculating missing data
+Generates LD statistics report based on list of snps from previous section (cond.snps) 
 ```
 module load gtool/0.7.5
 #remove indels if applicable
@@ -303,15 +293,7 @@ plink --file /TMP/OmniExome --extract cond.snps --r2 --ld-snp-list cond.snps --l
 ```
 
 read into R
-
-MARIE: what are these files?
-nfbc66_ld.RData
-nfbc86_ld.RData
-KF4_ld.RData
-IA317_ld.RData
-IA610_ld.RData
-OmniX_ld.RData
-OmniExome_ld.RData
+[cohort].ld: LD reports for each cohort (columns:CHR_A, BP_A, SNP_A, CHR_B, BP_B, SNP_B, R2)
 
 ```{r}
 
@@ -431,8 +413,7 @@ save(sigtab, file=paste(tid, '.RData', sep=''))
 ## Merge and pruning of CpGs
 
 MARIE: What are these files
-anno.RData
-paste('betaQN_', cohort, '.RData', sep='')
+anno.RData: consists of "annometh" and "annosnp" (rsid/cpg, chr, pos)
 
 ```{r}
 ## can be parallelized by chr (tid=chr no.)
