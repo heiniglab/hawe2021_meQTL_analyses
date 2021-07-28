@@ -40,7 +40,15 @@ Conditional meQTL analysis and LD pruning is described here: [conditional_analys
 Identified meQTL were corroborated using several replication analyses.
 The meDIP-seq replcation is provided in a separate repository: [meDIP-seq replication](medipseq_replication/)
 
-## Identification of eQTMs
+## Identification of eQTLs and eQTMs
+
+We computated both associations between genotypes and expression (expression ~ genotypes) called expression quantatiative trait loci (eQTL) and associations between between methylation and expression (expression ~ methylation) called expression quantiative trait methylation (eQTM).
+
+The eQTL analysis is restricted to sentinel meQTL SNPs. Following the snakemake workflow [eqtl_sentinel_snp/Snakefile](eqtl_sentinel_snp/Snakefile.sm), eQTLs are calculated separately for each cohort (adjusting the expression for covariates and houseman groups before) and then the results are combined in a meta-analysis. 
+
+A similar workflow is applied for the eQTMs in [eqtm_identification/Snakefile](eqtm_identification/Snakefile.sm), with a separate analysis per cohort followed by a meta-analsis. The analysis is ran with two different versions of the expression and methylation data, once corrected for only the genotype (files called GTregressed) and once corrected for the genotype and cell proportions (files called CPregressed). Additionally, the replication rates between cohorts are calculated, both for Bonferroni and FDR corrected significance thresholds. The FDR calculation requires sorting the files locally with sufficient amount of RAM, this part is not incorporated in the snakemake workflow (please take a look at the documentation of the associated rule "replicate_eqtm" for details).
+
+The analysis requires genotype, expression, methlyation and covariate data (including Houseman estimates of the cell type proportions) of both cohorts as input. Required R packages for the snakemake workflows are matrixeQTL, RhpcBLASctl, tidyverse, data.table, GenomicRanges, purrr (all included  in the [conda environment](epic_meqtl/envs/rbio.yaml)).
 
 ## Functional analyses of meQTL CpGs
 CpG sites with meQTL were tested for association with other traits in our cohort. Based on these results meQTL CpG sites were compared to random background CpG sets to test for enrichment of trait associations. Analyses are described here: [cpg_enrichment/](cpg_enrichment/).
@@ -91,11 +99,7 @@ We tested if meQTL relationships might be influenced by environmental context. F
 meth ~ geno + pheno + geno:pheno + covariates
 ```
 
-The following phenotypes were examined: smoking (yes/no), BMI and estimated proportions of CD8 T cells, CD4 T cells and monocytes. The analysis was once performed restricted to the cosmopolitan meQTLs and once in a genome-wide cis analysis.
-
-### iQTLs at cosmopolitan meQTLs
-
-### Genome-wide cis-iQTLs
+The following phenotypes were examined: smoking (yes/no), BMI and estimated proportions of CD8 T cells, CD4 T cells and monocytes. 
 
 For the genome-wide cis iQTL analysis, we ran the analysis using [tensorqtl](https://github.com/broadinstitute/tensorqtl). We performed the analysis separetly for each cohort and phenotype and parallelized over the chromosomes, submitting to a GPU server with a slurm workload manager (see scripts in `interactionQTL/tensorqtl_runs`), e.g.
 
@@ -107,6 +111,7 @@ Afterwards, significant iQTLs were determined using a Bonferroni corrected multi
 ```{bash}
 python -u interactionQTL/tensorqtl_runs/filter_iQTLs.py
 ```
+The analysis requires genotype, methlyation and covariate data of both cohorts as input.
 
 ## EPIC comparison
 

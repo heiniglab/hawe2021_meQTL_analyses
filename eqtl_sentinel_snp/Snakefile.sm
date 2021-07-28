@@ -1,0 +1,106 @@
+# -----------------------------------------------------------------------------
+# Snakemake file to run the eQTL meta analysis on all sentinel SNPs
+#
+# @author Johann Hawe, Katharina Schmid
+# -----------------------------------------------------------------------------
+
+#populations
+populations = ["LOLIPOP_SA", "LOLIPOP_EUR", "KORA"]
+
+# ------------------------------------------------------------------------------
+# Regress covariates and houseman groups from expression data
+# ------------------------------------------------------------------------------
+rule regress_covariates:
+        input:
+                expr = "results/current/eqtls_sentinel_snps/matrixEQTL/expression_{pop}.tsv",
+                covars = "results/current/eqtls_sentinel_snps/matrixEQTL_input/covariates_plus_houseman_{pop}.tsv"
+        output:
+                expr = "results/current/eqtls_sentinel_snps/matrixEQTL_input/expression_{pop}_covariatesHousemanRegressed.tsv"
+
+        params:
+                time = "12:00:00"
+        resources:
+                mem_mb = 16000
+        threads: 1
+        log:
+                "logs/matrixEQTL/regress_covars_{pop}.log"
+        benchmark:
+                "benchmarks/matrixEQTL/regress_covars_{pop}.bmk"
+        script:
+                "R/regress_covariates.R"
+    
+# ------------------------------------------------------------------------------
+# Run matrix eQTL to get targeted eQTL results
+# Expression data already processed for eqtl_eqtm_enrichment (outside of snakemake)
+# ------------------------------------------------------------------------------
+rule run_matrixEQTL_eqtls_sentinel_snps:
+        input:
+                dependent = "results/current/eqtls_sentinel_snps/matrixEQTL_input/expression_{pop}_covariatesHousemanRegressed.tsv",
+                independent = "results/current/eqtls_sentinel_snps/matrixEQTL_input/genotypes_{pop}.tsv"
+        output:
+                associations = "results/current/eqtls_sentinel_snps/matrixEQTL/eqtls_{pop}.tsv"
+        params:
+                time = "1-00:00:00",
+                use_subset = "F",
+                keep_non_beta = "T",
+                calculate_no_fdr = "T"
+        threads:
+                5
+        resources:
+                mem_mb = 30000
+        log:
+                "logs/matrixEQTL/eqtls_sentinel_snps_{pop}.log"
+        benchmark:
+                "benchmarks/matrixEQTL/eqtls_sentinel_snps_{pop}.bmk"
+        script:
+                "R/run_matrixEQTL.R"
+
+rule all_run_matrixEQTL_eqtls:
+        input:
+                expand("results/current/eqtls_sentinel_snps/matrixEQTL/eqtls_{pop}.tsv", pop = populations)
+
+# ------------------------------------------------------------------------------
+# Get meta anaylzed results
+# ------------------------------------------------------------------------------
+rule meta_analyze_eqtl_sentinel_snps:
+        input:
+                eur = "results/current/eqtls_sentinel_snps/matrixEQTL/eqtls_LOLIPOP_EUR.tsv",
+                sa = "results/current/eqtls_sentinel_snps/matrixEQTL/eqtls_LOLIPOP_SA.tsv",
+                eurk= "results/current/eqtls_sentinel_snps/matrixEQTL/eqtls_KORA.tsv"
+        output:
+                result = "results/current/eqtls_sentinel_snps/meta_eqtl_sentinel_snps.tsv"
+        params:
+                time = "2-00:00:00"
+        threads: 6
+        resources:
+                mem_mb = 50000
+        benchmark:
+                "benchmarks/meta_eqtls_sentinel_snps.bmk"
+        log:
+                "logs/meta_eqtls_sentinel_snps.log"
+        script:
+      	        "R/meta_analyze_eqtls.R"
+		
+# ------------------------------------------------------------------------------
+# Annotate meta-analysed results in cis, long-range and trans
+# and filter after Bonferroni corrected threshold
+# ------------------------------------------------------------------------------
+rule annotate_meta_eqtl_sentinel_snps:
+        input:
+                eqtls = "results/current/eqtls_sentinel_snps/meta_eqtl_sentinel_snps.tsv"
+                gene_pos = ""results/current/eqtls_sentinel_snps/genePos_biomart_hg19.txt"
+                snp_pos = "data/current/meQTLs/st9_sentinel_snps_and_cpgs.txt"
+        output:
+                result = "results/current/eqtls_sentinel_snps/meta_eqtl_sentinel_snps_filtered.tsv" 
+        params:
+                time = "1-00:00:00"
+        threads: 6
+        resources:
+                mem_mb = 16000
+        benchmark:
+                "benchmarks/annotate_meta_eqtls_sentinel_snps.bmk"
+        log:
+                "logs/annotate_meta_eqtls_sentinel_snps.log"
+        script:
+      	        "R/annotate_eqtl_sentinel_snps.R"
+      	        

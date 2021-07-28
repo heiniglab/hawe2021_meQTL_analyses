@@ -1,0 +1,265 @@
+# -----------------------------------------------------------------------------
+# Snakemake file to run the eQTM meta analysis
+#
+# @author Johann Hawe, Katharina Schmid
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# First part: eQTM meta-analysis
+# -----------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Generate genotype regressed version of the methylation and expression data
+# ------------------------------------------------------------------------------
+
+rule regress_genotype_methylation:
+    input:
+        data = "results/current/eqtm_full_updated/input_files/methylation_{cohort}_sorted.RDS",
+        position = "results/current/trans_eqtm_full/cpg_positions.RData",
+        qtls = "results/current/eqtm_full_updated/input_files/eqtls.tsv",
+        snps = "results/current/eqtm_full_updated/input_files/geno_full_sorted_{cohort}.bgz",
+        snps_indiv = "results/current/eqtm_full_updated/input_files/indivuals_{cohort}.csv"
+    output:
+        data = "results/current/eqtm_full_updated/input_files/methylation_{cohort}_GTregressed_sorted.RDS"
+    log:
+        "logs/eqtm_fullanalysis_update/regress_qtls_methylation_{correction}.log"
+    benchmark:
+        "benchmarks/eqtm_fullanalysis_update/regress_qtls_methylation_{correction}.bmk"
+    threads: 6
+    resources:
+        mem_mb = 50000
+    params:
+    time = "1-00:00:00"
+    script:
+        "R/matrixeqtl_for_eqtms_fullset.R"
+
+rule regress_genotype_expression:
+    input:
+        data = "results/current/eqtm_full_updated/input_files/expression_{cohort}_sorted.RDS",
+        position = "results/current/trans_eqtm_full/genePos_biomart_hg19.txt",
+        qtls = "results/current/eqtm_full_updated/input_files/meqtls.tsv",
+        snps = "results/current/eqtm_full_updated/input_files/geno_full_sorted_{cohort}.bgz",
+        snps_indiv = "results/current/eqtm_full_updated/input_files/indivuals_{cohort}.csv"
+    output:
+        data = "results/current/eqtm_full_updated/input_files/expression_{cohort}_GTregressed_sorted.RDS"
+    log:
+        "logs/eqtm_fullanalysis_update/regress_qtls_expression_{cohort}.log"
+    benchmark:
+        "benchmarks/eqtm_fullanalysis_update/regress_qtls_expression_{cohort}.bmk"
+    threads: 6
+    resources:
+        mem_mb = 50000
+    params:
+        time = "1-00:00:00"
+    script:
+        "R/matrixeqtl_for_eqtms_fullset.R"
+
+# ------------------------------------------------------------------------------
+# Generate cell type regressed version of the methylation and expression data
+# ------------------------------------------------------------------------------
+
+rule regress_cell_prop:
+    input:
+        data = "results/current/eqtm_full_updated/input_files/{dataset}_{cohort}_GTregressed_sorted.RDS",
+        houseman = "results/current/eqtm_full_updated/input_files/houseman_{cohort}.tsv"
+    output:
+        data = "results/current/eqtm_full_updated/input_files/{dataset}_{cohort}_CPregressed_sorted.RDS"
+    log:
+        "logs/eqtm_fullanalysis_update/regress_houseman_{dataset}_{cohort}.log"
+    benchmark:
+        "benchmarks/eqtm_fullanalysis_update/regress_houseman_{dataset}_{cohort}.bmk"
+    threads: 1
+    resources:
+        mem_mb = 36000
+    params:
+    time = "12:00:00"
+    script:
+        "R/regress_houseman.R"
+
+# ------------------------------------------------------------------------------
+# Run eQTM analysis on the full set of CpG-gene pairs
+# ------------------------------------------------------------------------------
+
+rule matrixeqtl_eqtm_full:
+	input:
+		methylation = "results/current/eqtm_full_updated/input_files/methylation_{cohort}_{correction}_sorted.RDS",
+		expression = "results/current/eqtm_full_updated/input_files/expression_{cohort}_{correction}_sorted.RDS",
+		covariates = "results/current/eqtm_full_updated/input_files/covariates_{cohort}_sorted.RDS",
+	output:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_{cohort}_{correction}.tsv"
+	log:
+		"logs/eqtm_fullanalysis_update/eqtms_{cohort}_{correction}.log"
+	benchmark:
+		"benchmarks/eqtm_fullanalysis_update/eqtms_{cohort}_{correction}.bmk"
+	threads: 6
+	resources:
+		mem_mb = 50000
+	params:
+		time = "1-00:00:00"
+	script:
+		"R/matrixeqtl_for_eqtms_fullset.R"
+
+
+# ----------------------------------------------------------------------------------
+# Get meta analysis results
+# ----------------------------------------------------------------------------------
+rule meta_eqtm_full:
+	input:
+		eurk = "results/current/eqtm_full_updated/eqtms_full_KORA_{correction}.tsv",
+		eur = "results/current/eqtm_full_updated/eqtms_full_LOLIPOP_EUR_{correction}.tsv",
+		sa = "results/current/eqtm_full_updated/eqtms_full_LOLIPOP_{correction}.tsv"
+	output:
+		result = "results/current/eqtm_full_updated/eqtms_full_{correction}_meta.tsv"
+	log:
+		"logs/eqtm_fullanalysis_update/{correction}.log"
+	benchmark:
+		"benchmarks/eqtm_fullanalysis_update/{correction}.bmk"
+	threads: 6
+	resources:
+		mem_mb = 50000
+	params:
+		time = "2-00:00:00"
+	script:
+		"R/meta_analyze_eqtm.R"
+
+# ------------------------------------------------------------------------------
+# Filter according to bonferroni corrected P<0.05 
+# (total number of comparisons was 5738181750)
+# ------------------------------------------------------------------------------
+rule filter_eqtm_sign:
+	input:
+ 		"results/current/eqtm_full_updated/eqtms_full_{correction}_meta.tsv"
+	output:
+		"results/current/eqtm_full_updated/eqtms_full_{correction}_meta_sign.tsv"
+	params:
+		cutoff = 8.7e-12
+	shell:
+		"""
+ 		# header will be included
+		awk '{{if(($15+0) <= {params.cutoff}) print; }}' {input} > {output}
+		"""
+
+# ------------------------------------------------------------------------------
+# Annotate eQTMs		
+# ------------------------------------------------------------------------------
+rule annotate_meta_eqtm:
+	input:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_{correction}_meta_sign.tsv",
+		cpg_pos = "results/current/trans_eqtm_full/cpg_positions.RData",
+		gene_pos = "results/current/trans_eqtm_full/genePos_biomart_hg19.txt"
+	output:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_{correction}_meta_annotated.tsv.gz"
+	log:
+		"logs/eqtm_fullanalysis_update/annotate_eqtm_{correction}.log"
+	benchmark:
+		"benchmarks/eqtm_fullanalysis_update/annotate_eqtm_{correction}.bmk"
+	threads: 1
+	resources:
+		mem_mb = 32000
+	params:
+		time = "4:00:00"
+	script:
+		"R/annotate_meta_eqtms.R"
+
+# ------------------------------------------------------------------------------
+# Add meta beta and se (CPregressed: all eQTMs, GTregressed: only cis eQTMs)		
+# ------------------------------------------------------------------------------
+
+rule annotate_meta_eqtm_beta_CP:
+	input:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_CPregressed_meta_annotated.tsv.gz",
+	output:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_CPregressed_meta_annotated_beta.tsv.gz"
+	log:
+		"logs/eqtm_fullanalysis_update/annotate_eqtm_CPregressed_beta.log"
+	benchmark:
+		"benchmarks/eqtm_fullanalysis_update/annotate_eqtm_CPregressed_beta.bmk"
+	threads: 1
+	resources:
+		mem_mb = 16000
+	params:
+		time = "0:30:00",
+		cis = "FALSE"
+	script:
+		"R/eqtl_eqtm_enrichment/annotate_meta_eqtms_beta.R"
+
+rule annotate_meta_eqtm_beta_GT:
+	input:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_GTregressed_meta_annotated.tsv.gz",
+	output:
+		eqtms = "results/current/eqtm_full_updated/eqtms_full_GTregressed_meta_annotated_beta_cis.tsv.gz"
+	log:
+		"logs/eqtm_fullanalysis_update/annotate_eqtm_GTregressed_beta.log"
+	benchmark:
+		"benchmarks/eqtm_fullanalysis_update/annotate_eqtm_GTregressed_beta.bmk"
+	threads: 1
+	resources:
+		mem_mb = 32000
+	params:
+		time = "2:00:00",
+		cis = "TRUE"
+	script:
+		"R/eqtl_eqtm_enrichment/annotate_meta_eqtms_beta.R"
+		
+# -----------------------------------------------------------------------------
+# Target rule to calculate all meta significant eqtms
+# -----------------------------------------------------------------------------
+
+rule all_annotated_eqtm:
+	input:
+		"results/current/eqtm_full_updated/eqtms_full_CPregressed_meta_annotated_beta.tsv.gz",
+		"results/current/eqtm_full_updated/eqtms_full_GTregressed_meta_annotated_beta_cis.tsv.gz"
+
+
+# -----------------------------------------------------------------------------
+# Second part: replication between cohorts
+# -----------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Replication analysis for eQTM
+# 
+# Scripts used to create adjusted files can be found under 'scripts'.
+# Were run to use 'localscratch'. make sure that any system has enough
+# localscratch available to sort files (at least 0.5T).
+#
+# scripts/sort-local.sh: sort input (raw matrixEQTL outputs) descreasingly by pvalue
+# scripts/padjust_naive.py: adds BH adjusted p-value to results files sorted decr. by 
+#   p-calue
+#
+# Run the scripts:
+# scripts/sort-local.sh results/current/eqtm_full_updated/eqtms_full_{cohort}_{correction}.tsv
+# scripts/padjust_naive.py results/current/eqtm_full_updated/eqtms_full_{cohort}_{correction}.tsv.sorted
+#   > results/current/eqtm_full_updated/eqtms_full_{cohort}_{correction}.tsv.sorted.adjusted
+#
+# ------------------------------------------------------------------------------
+rule replicate_eqtm:
+        input:
+                cpg_positions = "results/current/eqtm_full_updated/cpg_positions.RData",
+                gene_positions = "results/current/eqtm_full_updated/genePos_biomart_hg19.txt",
+                eur = "results/current/eqtm_full_updated/eqtms_full_KORA_{correction}.tsv.sorted.adjusted",
+                sa = "results/current/eqtm_full_updated/eqtms_full_LOLIPOP_{correction}.tsv.sorted.adjusted"
+        output:
+                kora = "results/current/eqtm_full_updated/eqtms_full_KORA_{correction}_filtered_FDRSign.tsv",
+                lolipop = "results/current/eqtm_full_updated/eqtms_full_LOLIPOP_{correction}_filtered_FDRSign.tsv",
+                counts = "results/current/eqtm_full_updated/eqtms_full_{correction}_counts.rds"
+        log:
+                "logs/replicate_eqtm/{correction}.log"
+        benchmark:
+                "benchmarks/replicate_eqtm/{correction}.bmk"
+        threads: 6
+        resources:
+                mem_mb = 50000
+        params:
+                time = "2-00:00:00"
+        script:
+                "../R/replicate_eqtm.R"
+
+
+# -----------------------------------------------------------------------------
+# Target rule to calculate replication rates
+# -----------------------------------------------------------------------------
+
+rule all_replicate_eqtm:
+	input:
+		"results/current/eqtm_full_updated/eqtms_full_GTregressed_counts.rds",
+		"results/current/eqtm_full_updated/eqtms_full_GTregressed_counts.rds"
