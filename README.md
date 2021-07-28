@@ -14,7 +14,7 @@ Johann S Hawe, Rory Wilson, Katharina Schmid, Li Zhou, Lakshmi Lakshmanan, Benja
       * [EPIC meQTL](#epic-meqtl)
       * [Conditional analysis and pruning](#conditional-analysis-and-pruning)
    * [meQTL replication meDIPseq](#meqtl-replication-medipseq) 
-   * [Identification of eQTMs](#identification-of-eqtms)
+   * [Identification of eQTLs and eQTMs](#identification-of-eqtls-and-eqtms)
    * [Functional analyses of meQTL CpGs](#functional-analyses-of-meqtl-cpgs)
    * [Functional analyses of meQTL pairs](#functional-analyses-of-meqtl-pairs)
       * [Chromatin state enrichment](#chromatin-state-enrichment)
@@ -46,7 +46,7 @@ We computated both associations between genotypes and expression (expression ~ g
 
 The eQTL analysis is restricted to sentinel meQTL SNPs. Following the snakemake workflow [eqtl_sentinel_snp/Snakefile](eqtl_sentinel_snp/Snakefile.sm), eQTLs are calculated separately for each cohort (adjusting the expression for covariates and houseman groups before) and then the results are combined in a meta-analysis. 
 
-A similar workflow is applied for the eQTMs in [eqtm_identification/Snakefile](eqtm_identification/Snakefile.sm), with a separate analysis per cohort followed by a meta-analsis. The analysis is ran with two different versions of the expression and methylation data, once corrected for only the genotype (files called GTregressed) and once corrected for the genotype and cell proportions (files called CPregressed). Additionally, the replication rates between cohorts are calculated, both for Bonferroni and FDR corrected significance thresholds. The FDR calculation requires sorting the files locally with sufficient amount of RAM, this part is not incorporated in the snakemake workflow (please take a look at the documentation of the associated rule "replicate_eqtm" for details).
+A similar workflow is applied for the eQTMs in [eqtm_identification/Snakefile](eqtm_identificaton/Snakemake.sm), with a separate analysis per cohort followed by a meta-analsis. The analysis is ran with two different versions of the expression and methylation data, once corrected for only the genotype (files called GTregressed) and once corrected for the genotype and cell proportions (files called CPregressed). Additionally, the replication rates between cohorts are calculated, both for Bonferroni and FDR corrected significance thresholds. The FDR calculation requires sorting the files locally with sufficient amount of RAM, this part is not incorporated in the snakemake workflow (please take a look at the documentation of the associated rule "replicate_eqtm" for details).
 
 The analysis requires genotype, expression, methlyation and covariate data (including Houseman estimates of the cell type proportions) of both cohorts as input. Required R packages for the snakemake workflows are matrixeQTL, RhpcBLASctl, tidyverse, data.table, GenomicRanges, purrr (all included  in the [conda environment](epic_meqtl/envs/rbio.yaml)).
 
