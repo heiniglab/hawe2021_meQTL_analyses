@@ -2,6 +2,8 @@
 
 Enrichment analyses for the lists of epigenetic regulators provided in the Lemire et al. 2015 paper (https://www.nature.com/articles/ncomms7326)
 
+Lists of regulators are provided in lemire2015/ sub-directory.
+
 Can be run via the provided snakemake file, e.g.:
 
 ```{bash}

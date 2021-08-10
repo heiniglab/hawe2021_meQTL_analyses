@@ -17,7 +17,7 @@ library(ggpubr)
 library(cowplot)
 library(tidyverse)
 theme_set(theme_cowplot())
-dout_figures <- "results/current/figures/"
+dout_figures <- "figures/"
 dir.create(dout_figures)
 
 # some discrete colors to be used
@@ -27,7 +27,7 @@ COLORS_QUAL <- RColorBrewer::brewer.pal(3, "Set2")
 ## cis-meQTL chromHMM enrichment
 
 ```{r echo=F}
-fresults <- list.files("results/current/chromHMM_enrichment_slurm/", "*.rds",
+fresults <- list.files("chromHMM_enrichment_slurm/", "*.rds",
                        full.names = T)
 ```
 
@@ -161,7 +161,7 @@ save_plot(file.path(dout_figures, "chromHMM_cre_enrichment_histogram.pdf"),
 # now we also load the data from the EPIC comparison and create a plot
 # indicating the overlap in these data
 # print basic information immediately
-epic_res <- read_tsv("results/current/cre_enrichment/450k_vs_epic/annotation_overlap_epic.tsv")
+epic_res <- read_tsv("cre_enrichment_450k_vs_epic_annotation_overlap_epic.tsv")
 total <- nrow(epic_res)
 same_state <- sum(epic_res$enh_enh, epic_res$prom_prom)
 epic_fraction <- same_state / total
@@ -169,7 +169,7 @@ print("Fraction of pairs in the same state (enhancer/promoter")
 print(epic_fraction)
 
 # also get the single background sampling we performed
-fepic_bg_res <- list.files("results/current/cre_enrichment/450k_vs_epic/", 
+fepic_bg_res <- list.files("cre_enrichment_450k_vs_epic_", 
                            "epic_background_iter.*.tsv", 
                            full.names = T)
 epic_bg_res <- lapply(fepic_bg_res, function(f) {
@@ -239,15 +239,17 @@ library(FDb.InfiniumMethylation.hg19)
 cpg_ranges <- FDb.InfiniumMethylation.hg19::get450k()
 
 # chromHMM annotation files
-fsnp_annot <- "results/current/epigenetic_state_annotation_weighted_snps.rds"
-fcpg_annot <- "results/current/enrichment_epigenetic_state_weighted_annotation_all_cpgs.RData"
+fsnp_annot <- "epigenetic_state_annotation_weighted_snps.rds"
+fcpg_annot <- "enrichment_epigenetic_state_weighted_annotation_all_cpgs.RData"
 
 # define proomter and enhancer regions
 enhancer <- c("Genic enhancers", "Enhancers", "Bivalent Enhancer")
 promoter <- c("Active TSS", "Flanking Active TSS")
 
 print("Preparing cosmo object.")
-load("results/old/cis-cosmopairs_combined_151216.RData")
+# cosmopairs object filtered for cis associations only
+# (same chr, not more than 1e6bp apart)
+load("cis-cosmopairs_combined_151216.RData")
 cosmo <-
   cosmo[, c("snp", "snp.chr", "snp.pos", "cpg", "cpg.chr", "cpg.pos")]
 cosmo$snp <- as.character(cosmo$snp)
@@ -344,7 +346,7 @@ gp3 <- ggplot(toplot, aes(x=distance)) +
 
 pg <- plot_grid(gp1, gp2, gp3, align = "hv", axis="lt",
                 ncol=3,nrow=1, labels = "AUTO")
-save_plot("results/current/figures/chromHMM_based_distributions.pdf", 
+save_plot(paste0(dout_figures, "chromHMM_based_distributions.pdf"), 
           pg, base_asp = 1.1,
           ncol = 3, 
           nrow=1)

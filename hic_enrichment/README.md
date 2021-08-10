@@ -1,5 +1,7 @@
 ## README
 
+Input files for this analysis can be obtained from [zenodo](ZENODO_LINK).
+
 The `Snakefile` in this directory contains all rules used to evaluate the HiC
 enrichment for `longrange` (TAD + HiC) and `trans` meQTL pairs.
 Can be executed using [snakemake](https://snakemake.readthedocs.io), e.g.:

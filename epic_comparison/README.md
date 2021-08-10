@@ -1,5 +1,7 @@
 ## README
 
+Input files for this analysis can be obtained from [zenodo](ZENODO_LINK).
+
 ### TFBS enrichment TODO
 TFBS enrichment via Snakemake, see [Snakefile](Snakefile).
 

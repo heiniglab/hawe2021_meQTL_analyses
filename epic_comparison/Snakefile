@@ -3,12 +3,12 @@
 # ------------------------------------------------------------------------------
 rule tfbs_enrichment_epic:
 	input:
-		cpg_annot = "data/current/annotation/cpg_annotation_both_arrays.tsv",
-		meqtls = "data/current/meQTLs/sentinels_with_trans_epic.tsv",
-		tfbs_granges = "results/current/tfbs_granges.RData",
+		cpg_annot = "cpg_annotation_both_arrays.tsv",
+		meqtls = "sentinels_with_trans_epic.tsv",
+		tfbs_granges = "tfbs_granges.RData",
 	output:
-		tfbs_annot = "results/current/epic_cpgs_with_chipseq_context_100_resample_{nresample}_{cpg_subset}.RData",
-		result = "results/current/enrichment_chipseq_epic_context_100_resample_{nresample}_{cpg_subset}.txt"
+		tfbs_annot = "epic_cpgs_with_chipseq_context_100_resample_{nresample}_{cpg_subset}.RData",
+		result = "enrichment_chipseq_epic_context_100_resample_{nresample}_{cpg_subset}.txt"
 	wildcard_constraints:
 		nresample = "[0-9]+"
 	threads:
@@ -27,8 +27,8 @@ rule tfbs_enrichment_epic:
 
 rule tfbs_enrichment_epic_10000:
 	input:
-		"results/current/enrichment_chipseq_epic_context_100_resample_10000_450konly.txt",
-		"results/current/enrichment_chipseq_epic_context_100_resample_10000_450kwith450kBG.txt",
-		"results/current/enrichment_chipseq_epic_context_100_resample_10000_450kwithEPIC.txt",
-		"results/current/enrichment_chipseq_epic_context_100_resample_10000_EPICFull.txt",
-		"results/current/enrichment_chipseq_epic_context_100_resample_10000_EPICnoNovel.txt"
+		"enrichment_chipseq_epic_context_100_resample_10000_450konly.txt",
+		"enrichment_chipseq_epic_context_100_resample_10000_450kwith450kBG.txt",
+		"enrichment_chipseq_epic_context_100_resample_10000_450kwithEPIC.txt",
+		"enrichment_chipseq_epic_context_100_resample_10000_EPICFull.txt",
+		"enrichment_chipseq_epic_context_100_resample_10000_EPICnoNovel.txt"

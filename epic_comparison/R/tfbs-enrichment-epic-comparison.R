@@ -14,17 +14,17 @@ library(tidyverse)
 # ------------------------------------------------------------------------------
 # load data
 
-result_450k <- read_tsv("results/current/enrichment_chipseq_context_100_resample_10000.txt") %>%
+result_450k <- read_tsv("enrichment_chipseq_context_100_resample_10000.txt") %>%
   filter(max.q < 0.05)
-result_epic_full <- read_tsv("results/current/enrichment_chipseq_epic_context_100_resample_10000_EPICFull.txt") %>%
+result_epic_full <- read_tsv("enrichment_chipseq_epic_context_100_resample_10000_EPICFull.txt") %>%
   filter(max.q < 0.05)
-result_epic_nonovel <- read_tsv("results/current/enrichment_chipseq_epic_context_100_resample_10000_EPICnoNovel.txt") %>%
+result_epic_nonovel <- read_tsv("enrichment_chipseq_epic_context_100_resample_10000_EPICnoNovel.txt") %>%
   filter(max.q < 0.05)
-result_450k_with_epic <- read_tsv("results/current/enrichment_chipseq_epic_context_100_resample_10000_450kwithEPIC.txt") %>%
+result_450k_with_epic <- read_tsv("enrichment_chipseq_epic_context_100_resample_10000_450kwithEPIC.txt") %>%
   filter(max.q < 0.05)
-result_450k_epic_bg <- read_tsv("results/current/enrichment_chipseq_epic_context_100_resample_10000_450konly.txt") %>%
+result_450k_epic_bg <- read_tsv("enrichment_chipseq_epic_context_100_resample_10000_450konly.txt") %>%
   filter(max.q < 0.05)
-result_450k_450k_bg <- read_tsv("results/current/enrichment_chipseq_epic_context_100_resample_10000_450kwith450kBG.txt") %>%
+result_450k_450k_bg <- read_tsv("enrichment_chipseq_epic_context_100_resample_10000_450kwith450kBG.txt") %>%
   filter(max.q < 0.05)
 
 # ------------------------------------------------------------------------------

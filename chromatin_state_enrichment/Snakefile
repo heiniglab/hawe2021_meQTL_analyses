@@ -5,17 +5,17 @@ localrules: all_snp_cpg_annotation_overlap
 # ------------------------------------------------------------------------------
 rule snp_cpg_annotation_overlap_slurm:
         input:
-                cosmo = "results/current/cis-cosmopairs_combined_151216.RData",
-                cosmo_snps = "results/current/cosmo-snps.txt",
-                cosmo_cpgs = "results/current/cosmo-cpgs.txt",
-                snp_incl = "data/current/meQTLs/snps2include.RData",
-                cpg_incl = "data/current/meQTLs/cpgs2include.RData",
-                cpg_msd = "data/current/meQTLs/msd_lolipop.RData",
-                snp_freq = "results/current/allele_frequencies/kora.rds",
-                snp_annot = "results/current/epigenetic_state_annotation_weighted_snps.rds",
-                cpg_annot = "results/current/enrichment_epigenetic_state_weighted_annotation_all_cpgs.RData"
+                cosmo = "cis-cosmopairs_combined_151216.RData",
+                cosmo_snps = "cosmo-snps.txt",
+                cosmo_cpgs = "cosmo-cpgs.txt",
+                snp_incl = "snps2include.RData",
+                cpg_incl = "cpgs2include.RData",
+                cpg_msd = "cpg_annotation_lolipop.rds",
+                snp_freq = "allele_frequencies_kora.rds",
+                snp_annot = "epigenetic_state_annotation_weighted_snps.rds",
+                cpg_annot = "enrichment_epigenetic_state_weighted_annotation_all_cpgs.RData"
         output:
-                matches = "results/current/chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.rds"
+                matches = "chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.rds"
         threads:
                 1
         resources:
@@ -35,4 +35,4 @@ rule snp_cpg_annotation_overlap_slurm:
 # ------------------------------------------------------------------------------
 rule all_snp_cpg_annotation_overlap_slurm:
 	input:
-		expand("results/current/chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.rds", iter=range(1,151))
+		expand("chromHMM_enrichment_slurm/cis_annotation_overlap_{iter}.rds", iter=range(1,151))

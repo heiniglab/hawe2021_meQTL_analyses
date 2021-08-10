@@ -15,7 +15,7 @@ library(cowplot)
 library(ggpubr)
 
 theme_set(theme_cowplot())
-dout_figures <- "results/current/figures/"
+dout_figures <- "figures/"
 dir.create(dout_figures)
 ```
 
@@ -23,7 +23,7 @@ dir.create(dout_figures)
 
 ```{r quickload, echo=F}
 # just get quickly number of performed iterations for analysis from files
-denrich <- "results/current/javierre/trans_enrichment/50000/"
+denrich <- "javierre-2016/trans_enrichment/50000/"
 ftrans <- list.files(denrich, 
                      "iteration.*.RData$",  # new results
                      #"HIC_enrich.*.RData$", 
@@ -281,7 +281,7 @@ overlaps as compared to the observed population of meQTLs.
 
 ```{r enrich_results, echo=F}
 # load all individual files from the result directory
-denrich<-"results/current/javierre/longrange_enrichment/50000/"
+denrich<-"javierre-2016/longrange_enrichment/50000/"
 flongrange <- list.files(denrich, 
                       "iteration.*.RData$", 
                       full.names = T)

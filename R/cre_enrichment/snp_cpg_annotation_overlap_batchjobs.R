@@ -94,8 +94,7 @@ class(snp_freq) <- "data.frame"
 rownames(snp_freq) <- snp_freq$rsid
 # we adapted this from a script by B. Lehne
 snp_freq$maf = ifelse(snp_freq$maf > 0.5, 1 - snp_freq$maf, snp_freq$maf)
-load(fcpg_msd)
-cpg_msd <- msd
+cpg_msd <- readRDS(fcpg_msd)
 
 # only retain the cosmo pairs for which we have the freq/msd information
 # available

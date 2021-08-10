@@ -5,6 +5,8 @@ as compared to a random, matched background (150 iterations).
 
 The main R-script for this analysis is located under [snp_cpg_annotation_overlap_batchjobs.R](../R/cre_enrichment/snp_cpg_annotation_overlap_batchjobs.R).
 
+Input files for this analysis can be obtained from [zenodo](ZENODO_LINK).
+
 In order to calculate all iterations, a HPC should be used since these are
 some intensive calculations. In our case, we use the *all_snp_cpg_annotation_overlap*
 target rule and make a cluster call like so:

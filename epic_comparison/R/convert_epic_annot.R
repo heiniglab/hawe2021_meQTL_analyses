@@ -16,12 +16,12 @@ source("R/lib.R")
 print("Get snakemake params.")
 # ------------------------------------------------------------------------------
 # input
-fannot_snps <- "results/current/epic_annot/kora_epic.rds"
-fannot_cpgs <- "results/current/epic_annot/cpg_annotation_both_arrays.tsv"
+fannot_snps <- "cpg_base_annotation_kora_epic.rds"
+fannot_cpgs <- "cpg_annotation_both_arrays.tsv"
   
 # output
-fout_annot_cpgs <- "results/current/cpg_msd/kora_epic.rds"
-fout_annot_snps <- "results/current/allele_frequencies/kora_epic.rds"
+fout_annot_cpgs <- "cpg_annotation_kora_epic.rds"
+fout_annot_snps <- "allele_frequencies_kora_epic.rds"
 
 # ------------------------------------------------------------------------------
 print("Start processing.")
