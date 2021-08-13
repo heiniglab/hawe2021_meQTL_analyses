@@ -1,6 +1,6 @@
 ## README
 
-Input files for this analysis can be obtained from [zenodo](ZENODO_LINK).
+Input files for this analysis can be obtained from [zenodo](https://zenodo.org/record/5196216#.YRZ3TfJxeUk).
 
 ### TFBS enrichment TODO
 TFBS enrichment via Snakemake, see [Snakefile](Snakefile).
