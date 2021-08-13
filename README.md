@@ -24,6 +24,7 @@ Johann S Hawe, Rory Wilson, Katharina Schmid, Li Zhou, Lakshmi Lakshmanan, Benja
       * [Network analysis](#network-analysis)
    * [Identification of iQTL](#identification-of-iqtl)
    * [EPIC comparison](#epic-comparison)
+   * [Docker](#docker)
 
 ## Identification of meQTLs
 
@@ -117,3 +118,7 @@ The analysis requires genotype, methlyation and covariate data of both cohorts a
 
 We investigated to which degree the increased coverage and resolution of the EPIC array could impact our conclusions from the 1) cis regulatory element enrichment and 2) TFBS enrichment analyses.
 The scripts to calculate and compare the enrichments for the original 450k and the new EPIC meQTL pairs are deposited under [epic_comparison/](epic_comparison/)
+
+## Docker
+
+We provide some additional information as well as our [DOCKERFILE](docker/DOCKERFILE) under [docker/](docker/) in this repository.
