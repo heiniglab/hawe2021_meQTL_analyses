@@ -1,0 +1,105 @@
+# default R-version install via rocker, uses debian as a base
+FROM rocker/verse:3.6.1
+
+# ------------------------------------------------------------------------------
+# install some likely used basic unix stuff
+#
+# uuid-runtime: necessary to get uuidgen for secure cookie key file creation of 
+# rserver
+# ------------------------------------------------------------------------------
+RUN apt-get update -qq && apt-get -y --no-install-recommends install \
+	wget \
+	bzip2 \
+	nano \
+	vim \
+	uuid-runtime \
+	libcurl4-openssl-dev \
+	zlib1g zlib1g-dev \
+	libssl-dev \
+	libxml2-dev \
+	libmpc-dev \
+	libpng-dev \
+	libicu-dev \
+	liblzma-dev \
+	libbz2-dev \
+	libpcre3-dev \
+	openjdk-8-jdk \
+	default-jre \
+	openmpi-bin
+	
+# ------------------------------------------------------------------------------
+# create some specific directories for binding ICB storages
+# ------------------------------------------------------------------------------
+RUN mkdir -p /storage/groups/ /storage/scratch/ /home/icb/ /mnt/home/icb/ /localscratch/
+
+# ------------------------------------------------------------------------------
+# install some basic packages
+# ------------------------------------------------------------------------------
+RUN install2.r --error \
+  --deps TRUE \
+  doMPI \
+  Rmpi
+ 
+RUN install2.r --error \
+	--deps TRUE \	
+	data.table \
+	reshape2 \
+	batchtools \
+	mixtools \
+	getopt \
+	optparse \
+	RcppArmadillo
+	
+# needs to be done via BiocManager!
+RUN R -e "library(BiocManager)" \
+	-e "BiocManager::install(c('GenomicRanges', 'ggpubr', 'RBGL', 'graph'))"
+	
+# ------------------------------------------------------------------------------
+# add the additional packages not available in the basic version
+# ------------------------------------------------------------------------------
+# needs to be done via BiocManager!
+RUN R -e "library(BiocManager)" \
+	-e "BiocManager::install(c('Biostrings', 'BSgenome','BSgenome.Hsapiens.UCSC.hg19','BSgenome.Mmusculus.UCSC.mm10','DESeq','DESeq2','edgeR','Homo.sapiens','GO.db','GOstats','GSEABase','illuminaHumanv3.db','FDb.InfiniumMethylation.hg19','Mus.musculus','OrganismDbi','org.Hs.eg.db','org.Mm.eg.db','Rgraphviz','ROCR','rtracklayer','TxDb.Hsapiens.UCSC.hg19.knownGene','TxDb.Mmusculus.UCSC.mm10.ensGene','TxDb.Mmusculus.UCSC.mm10.knownGene','VariantAnnotation'))"
+
+RUN R -e "library(BiocManager)" \
+	-e "BiocManager::install(c('Rsamtools', 'biomaRt'))"
+
+# ------------------------------------------------------------------------------
+# show list of all installed packages
+# ------------------------------------------------------------------------------
+RUN R -e "sort(unname(installed.packages()[, 'Package']))"
+
+# ------------------------------------------------------------------------------
+# some clean up..
+# ------------------------------------------------------------------------------
+#system
+RUN rm -rf /var/lib/apt/lists/* \
+	&& apt-get clean \
+	&& apt-get purge
+	
+# R
+RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
+
+# ------------------------------------------------------------------------------
+# prepare the Rstudio authentication script
+# ------------------------------------------------------------------------------
+# path used in the start_rstudio script
+COPY rstudio_light_auth.sh /bin/
+RUN chmod +x /bin/rstudio_light_auth.sh && \
+  ln -s -r /bin/rstudio_light_auth.sh /bin/rstudio_light_auth
+
+# ------------------------------------------------------------------------------
+# prepare the rstudio start script
+# ------------------------------------------------------------------------------
+COPY start_rstudio.sh /bin/
+RUN chmod +x /bin/start_rstudio.sh && \
+  ln -s -r /bin/start_rstudio.sh /bin/start_rstudio
+
+# ------------------------------------------------------------------------------
+# finally, copy the actual dockerfile to the container for documentation
+# ------------------------------------------------------------------------------
+COPY DOCKERFILE /DOCKERFILE
+
+# all done.
+# server can now be started by calling '/bin/start_rstudio <port>' in the image
+
