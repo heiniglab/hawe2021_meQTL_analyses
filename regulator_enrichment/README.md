@@ -4,6 +4,8 @@ Enrichment analyses for the lists of epigenetic regulators provided in the Lemir
 
 Lists of regulators are provided in lemire2015/ sub-directory.
 
+Other input data are provided via [zenodo](https://zenodo.org/record/5196216#.YRZ3TfJxeUk)
+
 Can be run via the provided snakemake file, e.g.:
 
 ```{bash}
