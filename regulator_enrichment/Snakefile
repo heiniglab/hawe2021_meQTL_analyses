@@ -7,12 +7,12 @@ rule regulator_enrichment:
 	input:
 		lemire_regulators = "./lemire2015/epigenetic_trans_regulators.txt",
 		lemire_tfs = "./lemire2015/curated_tfs.txt",
-		cosmo_snps = "results/current/cosmo-snps.txt",
-		incl_snps = "data/current/meQTLs/snps2include.RData",
-		pruned = "data/current/meQTLs/transpairs_r02_110117_converted_1MB.txt"
+		cosmo_snps = "cosmo-snps.txt",
+		incl_snps = "snps2include.RData",
+		pruned = "transpairs_r02_110117_converted_1MB.txt"
 	output:
-		plot = "results/current/lemire_enrichment/overview_plot.pdf",
-		data = "results/current/lemire_enrichment/results.RData"
+		plot = "lemire_enrichment/overview_plot.pdf",
+		data = "lemire_enrichment/results.RData"
 	threads: 24
 	log:
 		"logs/enrich_lemire_regulators.log"
