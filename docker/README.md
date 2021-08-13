@@ -1,6 +1,6 @@
 ## README
 
-The provided (DOCKERFILE)[DOCKERFILE] in this repository was used to run most of the anlayses (unless stated otherwise).
+The provided [DOCKERFILE](DOCKERFILE) in this repository was used to run most of the anlayses (unless stated otherwise).
 
 Below we provide a short description on how we used docker containers with charliecloud.
 
