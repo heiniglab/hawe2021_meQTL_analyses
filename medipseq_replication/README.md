@@ -18,7 +18,7 @@ Based on summary statistics, we see how many of the HSM-LD block associations we
 
 ## Data
 
-The data required for the code are found in 'data/' and are the following:
+The data required for the code are found at 10.5281/zenodo.5196216 and are the following:
 
 * *mergeFinal_hsm_LDblock_GWASSNPs.txt*
 
